@@ -25,3 +25,8 @@
     level:
       org.springframework.jdbc.datasource.DriverManagerDataSource: DEBUG
       org.hibernate.engine.jdbc.env.internal.JdbcEnvironmentInitiator: DEBUG
+
+  gemini:
+    api:
+      key: ${GEMINI_API_KEY}
+
