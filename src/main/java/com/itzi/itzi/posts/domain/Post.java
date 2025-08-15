@@ -23,7 +23,7 @@ public class Post {
     private Long postId;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "post_type", nullable = false)
+    @Column(name = "post_type")
     private Type type;
 
     // 추후에 Store 엔티티 FK 예정
