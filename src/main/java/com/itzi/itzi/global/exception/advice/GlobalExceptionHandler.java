@@ -24,9 +24,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     // GeneralException 처리
     @ExceptionHandler(GeneralException.class)
-    public ResponseEntity<ApiResponse<Object>> handleCustomException
-    (GeneralException e) {
+    public ResponseEntity<ApiResponse<Object>> handleCustomException(GeneralException e) {
         ErrorReasonDto reason = e.getErrorReasonHttpStatus();
+
+        log.error("[GeneralException] code: {}, message: {}", reason.getCode(), reason.getMessage(), e);
+
         return new ResponseEntity<>(ApiResponse.onFailure(reason.getCode
                 (), reason.getMessage(), null), reason.getHttpStatus());
     }
@@ -37,6 +39,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                                                                   HttpHeaders headers, HttpStatusCode status, WebRequest request) {
         Map<String, String> errors = new HashMap<>();
         e.getBindingResult().getFieldErrors().forEach(err -> errors.put(err.getField(), err.getDefaultMessage()));
+
+        log.error("[Validation Error] code: {}, errors: {}",
+                ErrorStatus.VALIDATION_ERROR.getCode(), errors, e);
+
         return new ResponseEntity<>(ApiResponse.onFailure(ErrorStatus.VALIDATION_ERROR.getCode(), "Validation Error", errors),
                 HttpStatus.BAD_REQUEST);
     }
@@ -44,7 +50,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     // 그 외 모든 예외 처리
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Object>> handleException(Exception e) {
-        e.printStackTrace(); // 서버 로그에 예외 내용 출력
+
+        log.error("[Unhandled Exception] code: {}, message: {}",
+                ErrorStatus.INTERNAL_ERROR.getCode(), e.getMessage(), e);
+
         return new ResponseEntity<>(ApiResponse.onFailure(ErrorStatus._BAD_REQUEST.getCode(), e.getMessage(), null),
                 HttpStatus.INTERNAL_SERVER_ERROR);
     }
