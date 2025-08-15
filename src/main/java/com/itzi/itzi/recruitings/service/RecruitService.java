@@ -97,7 +97,6 @@ public class RecruitService {
                 .build();
     }
 
-
     private void validate(Type type, RecruitingAiGenerateRequest request) {
         if (type == null) {
             throw new GeneralException(ErrorStatus._BAD_REQUEST);
@@ -139,7 +138,10 @@ public class RecruitService {
 
         return """
         너는 아래 '샘플 출력 양식'과 **완전히 동일한 레이아웃**으로 본문을 작성한다.
-        - 생성할 때마다 다른 이모지를 적절하게 사용
+        - 이모지 사용 규칙
+            1) 이모지 리스트 `[☺️😊😚🙌🏻🤝🏻🤙🏻🙏🏻🍀⭐️💌📍❗️️💬📢🕒]`에서 **3개를 무작위로 선택**
+            2) **1문단과 2문단 본문 내용에서만** 적절히 배치
+            3) 📅 제휴 기간, 🎯 제휴 대상, 💬 문의 안내 **섹션과 해당 섹션의 본문에는 이모지 사용 금지**
         - 불필요한 접두/접미 문장, 설명, 따옴표, 코드블록 금지
         - 300~500자 내외, 문단은 샘플처럼 2개 본문 + 3개 섹션으로 구성
         - 아래 값으로 빈칸을 치환하여 최종 본문만 출력
