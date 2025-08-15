@@ -9,12 +9,14 @@ import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
 import com.itzi.itzi.posts.repository.PostRepository;
 import com.itzi.itzi.recruitings.dto.request.RecruitingAiGenerateRequest;
+import com.itzi.itzi.recruitings.dto.request.RecruitingDraftSaveRequest;
 import com.itzi.itzi.recruitings.dto.response.RecruitingAiGenerateResponse;
+import com.itzi.itzi.recruitings.dto.response.RecruitingDraftSaveResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -55,7 +57,7 @@ public class RecruitService {
         Post saved = postRepository.save(
                 Post.builder()
                         .type(Type.RECRUITING)
-                        .postImage(StringUtils.hasText(postImage) ? postImage.trim() : null)
+                        .postImage(hasText(postImage) ? postImage.trim() : null)
                         .title(request.getTitle().trim())
                         .target(request.getTarget().trim())
                         .startDate(request.getStartDate())
@@ -110,10 +112,10 @@ public class RecruitService {
         }
 
         // 모든 텍스트 필드 필수
-        if (!StringUtils.hasText(request.getTitle())
-                || !StringUtils.hasText(request.getTarget())
-                || !StringUtils.hasText(request.getBenefit())
-                || !StringUtils.hasText(request.getCondition())) {
+        if (!hasText(request.getTitle())
+                || !hasText(request.getTarget())
+                || !hasText(request.getBenefit())
+                || !hasText(request.getCondition())) {
             throw new GeneralException(ErrorStatus.REQUIRED_FIELD_MISSING);
         }
     }
@@ -200,7 +202,7 @@ public class RecruitService {
 
     private String callGemini(String endpoint, String prompt) {
         try {
-            if (!StringUtils.hasText(apiKey)) {
+            if (!hasText(apiKey)) {
                 throw new GeneralException(ErrorStatus.GEMINI_API_KEY_MISSING);
             }
 
@@ -235,7 +237,7 @@ public class RecruitService {
             JsonNode feedback = root.path("promptFeedback");
             if (!feedback.isMissingNode()) {
                 String blockReason = feedback.path("blockReason").asText("");
-                if (StringUtils.hasText(blockReason)) {
+                if (hasText(blockReason)) {
                     throw new GeneralException(ErrorStatus.GEMINI_BLOCKED,
                             blockReason + " / " + resp.body());
                 }
@@ -255,7 +257,7 @@ public class RecruitService {
 
             // 빈 텍스트를 반환했을 경우
             String text = parts.get(0).path("text").asText();
-            if (!StringUtils.hasText(text)) {
+            if (!hasText(text)) {
                 throw new GeneralException(ErrorStatus.GEMINI_EMPTY_TEXT, "body=" + resp.body());
             }
             return text.trim();
@@ -278,4 +280,90 @@ public class RecruitService {
         return Optional.empty();
     }
 
+    @Transactional
+    public RecruitingDraftSaveResponse saveOrUpdateDraft(Long userId, Type type, RecruitingDraftSaveRequest request) {
+
+        // 임시 저장을 하기 위해서는 최소 1개 이상의 필드가 작성돼 있어야 함
+        validateHasAnyDraftField(request);
+
+        Post entity;
+        if (request.getPostId() != null) {
+            entity = postRepository.findById(request.getPostId())
+                    .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND, "존재하지 않는 postId입니다."));
+
+            // status가 PUBLISHED, DELETED일 경우 임시 저장 불가
+            if (entity.getStatus() != Status.DRAFT) {
+                throw new GeneralException(ErrorStatus._BAD_REQUEST, "임시 저장은 DRAFT 상태의 게시글에만 가능합니다.");
+            }
+
+            // 2) 부분 업데이트(널이면 무시, 값이 있으면 반영)
+            applyPatch(entity, request);
+
+        } else {
+            // 새 DRAFT 글 생성
+            entity = Post.builder()
+                    .status(Status.DRAFT)
+                    .bookmarkCount(0L)
+                    .build();
+            applyPatch(entity, request);
+        }
+
+        // 항상 DRAFT 상태 유지
+        entity.setType(Type.RECRUITING);
+        entity.setStatus(Status.DRAFT);
+
+        Post saved = postRepository.save(entity);
+
+        return new RecruitingDraftSaveResponse(
+                Type.RECRUITING,
+                saved.getPostId(),
+                userId,
+                saved.getStatus(),
+                saved.getUpdatedAt()
+        );
+    }
+
+    // 임시 저장을 하기 위해서는 최소 1개 이상의 필드가 작성돼 있어야 함
+    private void validateHasAnyDraftField(RecruitingDraftSaveRequest request) {
+        boolean hasAny =
+                hasText(request.getPostImage()) ||
+                hasText(request.getTitle()) ||
+                hasText(request.getTarget()) ||
+                request.getStartDate() != null || request.getEndDate() != null ||
+                hasText(request.getBenefit()) || hasText(request.getCondition());
+
+        if (!hasAny) {
+            throw new GeneralException(ErrorStatus.REQUIRED_FIELD_MISSING, "임시 저장을 위해서는 1개 이상의 필드가 작성돼 있어야 합니다.");
+        }
+
+        if (request.getStartDate() != null && request.getEndDate() != null && request.getEndDate().isBefore(request.getStartDate())) {
+            throw new GeneralException(ErrorStatus.DATE_RANGE_INVALID);
+        }
+    }
+
+    private boolean hasText(String s) {
+        return s != null && !s.isBlank();
+    }
+
+    // 작성한 부분만 업데이트 (null이면 업데이트 X)
+    private void applyPatch(Post e, RecruitingDraftSaveRequest request) {
+        if (hasText(request.getPostImage())) e.setPostImage(request.getPostImage());
+        if (hasText(request.getTitle())) e.setTitle(request.getTitle());
+        if (hasText(request.getTarget())) e.setTarget(request.getTarget());
+
+        if (request.getStartDate() != null) e.setStartDate(request.getStartDate());
+        if (request.getEndDate() != null) e.setEndDate(request.getEndDate());
+
+        if (hasText(request.getBenefit())) e.setBenefit(request.getBenefit());
+        if (hasText(request.getCondition())) e.setCondition(request.getCondition());
+        if (hasText(request.getContent())) e.setContent(request.getContent());
+
+        if (request.getExposureEndDate() != null) e.setExposureEndDate(request.getExposureEndDate());
+
+        if (request.getTargetNegotiable() != null) e.setTargetNegotiable(request.getTargetNegotiable());
+        if (request.getPeriodNegotiable() != null) e.setPeriodNegotiable(request.getPeriodNegotiable());
+        if (request.getTargetNegotiable() != null) e.setTargetNegotiable(request.getTargetNegotiable());
+        if (request.getConditionNegotiable() != null) e.setConditionNegotiable(request.getConditionNegotiable());
+
+    }
 }
