@@ -2,6 +2,7 @@ package com.itzi.itzi.recruitings.dto.request;
 
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 
@@ -12,7 +13,7 @@ public class RecruitingDraftSaveRequest {
     // 존재할 경우 해당 DRAFT 글 업데이트, 없으면 생성
     private Long postId;
 
-    private String postImage;
+    private MultipartFile postImage;
     private String title;
     private String target;
 

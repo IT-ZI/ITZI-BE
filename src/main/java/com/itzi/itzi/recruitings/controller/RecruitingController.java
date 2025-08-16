@@ -12,6 +12,7 @@ import com.itzi.itzi.recruitings.dto.response.RecruitingPublishResponse;
 import com.itzi.itzi.recruitings.service.RecruitService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -23,19 +24,15 @@ public class RecruitingController {
     private final RecruitService recruitService;
 
     // 작성된 기본 정보를 바탕으로 상세 내용 생성
-    @PostMapping("/ai")
+    @PostMapping(value = "/ai")
     public ApiResponse<RecruitingAiGenerateResponse> generateRecruitingAi(
-            @RequestBody RecruitingAiGenerateRequest request
+            @ModelAttribute RecruitingAiGenerateRequest request   // 텍스트 + 파일 동시 바인딩
     ) {
-        Long fixedUserId = 1L; // userId : 항상 1로 고정
-        Type fixedType = Type.RECRUITING; // 항상 RECRUITING 고정
+        Long fixedUserId = 1L;                 // 항상 1
+        Type fixedType = Type.RECRUITING;      // 항상 RECRUITING
 
-        RecruitingAiGenerateResponse response = recruitService.generateRecruitingAi(
-                fixedUserId,
-                fixedType,
-                request.getPostImage(),
-                request
-        );
+        RecruitingAiGenerateResponse response =
+                recruitService.generateRecruitingAi(fixedUserId, fixedType, request);
 
         return ApiResponse.of(SuccessStatus._OK, response);
     }
@@ -43,10 +40,11 @@ public class RecruitingController {
     // 임시 저장
     @PostMapping("/draft")
     public ApiResponse<RecruitingDraftSaveResponse> saveRecruitingDraft(
-            @RequestBody RecruitingDraftSaveRequest request
+            @ModelAttribute RecruitingDraftSaveRequest request
     ) {
         Long fixedUserId = 1L;
         Type fixedType = Type.RECRUITING;
+
 
         RecruitingDraftSaveResponse response =
                 recruitService.saveOrUpdateDraft(fixedUserId, fixedType, request);

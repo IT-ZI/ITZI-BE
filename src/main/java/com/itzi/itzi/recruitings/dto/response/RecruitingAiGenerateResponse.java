@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
 import lombok.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -19,7 +20,7 @@ public class RecruitingAiGenerateResponse {
     private Long userId;
 
     private Type type;              // RECRUITING으로 고정
-    private String postImage;
+    private String postImage;       // Url로 반환
     private String title;
 
     private String target;
