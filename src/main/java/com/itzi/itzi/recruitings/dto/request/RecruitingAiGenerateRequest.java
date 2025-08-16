@@ -27,18 +27,11 @@ public class RecruitingAiGenerateRequest {
     private String benefit;
     private String condition;
 
-    @Valid
-    private Negotiables negotiables;
+    private Boolean targetNegotiable;
+    private Boolean periodNegotiable;
+    private Boolean benefitNegotiable;
+    private Boolean conditionNegotiable;
 
-    @Getter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class Negotiables {
-        private Boolean target;
-        private Boolean period;
-        private Boolean benefit;
-        private Boolean condition;
-    }
+    private LocalDate exposureEndDate;
 
 }

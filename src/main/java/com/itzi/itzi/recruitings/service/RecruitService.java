@@ -70,11 +70,11 @@ public class RecruitService {
                         .benefit(request.getBenefit().trim())
                         .condition(request.getCondition().trim())
                         .content(content)
-                        .targetNegotiable(request.getNegotiables() != null && Boolean.TRUE.equals(request.getNegotiables().getTarget()))
-                        .periodNegotiable(request.getNegotiables() != null && Boolean.TRUE.equals(request.getNegotiables().getPeriod()))
-                        .benefitNegotiable(request.getNegotiables() != null && Boolean.TRUE.equals(request.getNegotiables().getBenefit()))
-                        .conditionNegotiable(request.getNegotiables() != null && Boolean.TRUE.equals(request.getNegotiables().getCondition()))
-                        .exposureEndDate(request.getEndDate())                  // 수정 필요
+                        .targetNegotiable(Boolean.TRUE.equals(request.getTargetNegotiable()))
+                        .periodNegotiable(Boolean.TRUE.equals(request.getPeriodNegotiable()))
+                        .benefitNegotiable(Boolean.TRUE.equals(request.getBenefitNegotiable()))
+                        .conditionNegotiable(Boolean.TRUE.equals(request.getConditionNegotiable()))
+                        .exposureEndDate(request.getExposureEndDate())
                         .status(Status.DRAFT)
                         .build();
 
@@ -143,10 +143,10 @@ public class RecruitService {
                 .orElse("00대학교");       // 기본값
 
         // 대상, 기간, 혜택, 조건 협의 가능 문구
-        boolean targetOk = r.getNegotiables() != null && Boolean.TRUE.equals(r.getNegotiables().getTarget());
-        boolean periodOk = r.getNegotiables() != null && Boolean.TRUE.equals(r.getNegotiables().getPeriod());
-        boolean benefitOk = r.getNegotiables() != null && Boolean.TRUE.equals(r.getNegotiables().getBenefit());
-        boolean condOk   = r.getNegotiables() != null && Boolean.TRUE.equals(r.getNegotiables().getCondition());
+        boolean targetOk  = Boolean.TRUE.equals(r.getTargetNegotiable());
+        boolean periodOk  = Boolean.TRUE.equals(r.getPeriodNegotiable());
+        boolean benefitOk = Boolean.TRUE.equals(r.getBenefitNegotiable());
+        boolean condOk    = Boolean.TRUE.equals(r.getConditionNegotiable());
         String periodCondNote = (targetOk || periodOk || benefitOk || condOk ) ? " (대상, 기간, 혜택, 조건 협의 가능)" : "";
 
         return """
