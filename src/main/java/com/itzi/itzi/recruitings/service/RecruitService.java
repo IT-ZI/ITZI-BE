@@ -11,6 +11,7 @@ import com.itzi.itzi.posts.repository.PostRepository;
 import com.itzi.itzi.recruitings.dto.request.RecruitingAiGenerateRequest;
 import com.itzi.itzi.recruitings.dto.request.RecruitingDraftSaveRequest;
 import com.itzi.itzi.recruitings.dto.response.RecruitingAiGenerateResponse;
+import com.itzi.itzi.recruitings.dto.response.RecruitingDeleteResponse;
 import com.itzi.itzi.recruitings.dto.response.RecruitingDraftSaveResponse;
 import com.itzi.itzi.recruitings.dto.response.RecruitingPublishResponse;
 import lombok.RequiredArgsConstructor;
@@ -405,6 +406,29 @@ public class RecruitService {
                 post.getPostId(),
                 post.getStatus(),
                 post.getCreatedAt()
+        );
+    }
+
+    // 제휴 홍보글 삭제하기
+    @Transactional
+    public RecruitingDeleteResponse deleteRecruiting(Long postId) {
+
+        // 존재하는 게시글인지 확인
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
+
+        // 게시된 홍보글만 삭제 가능
+        if (post.getStatus() == Status.DELETED || post.getStatus() == Status.DRAFT) {
+            throw new GeneralException(ErrorStatus.CANNOT_DELETE_POST);
+        }
+
+        post.setStatus(Status.DELETED);
+        postRepository.save(post);
+
+        return new RecruitingDeleteResponse(
+                Type.RECRUITING,
+                post.getPostId(),
+                post.getStatus()
         );
     }
 }

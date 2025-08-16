@@ -6,6 +6,7 @@ import com.itzi.itzi.posts.domain.Type;
 import com.itzi.itzi.recruitings.dto.request.RecruitingAiGenerateRequest;
 import com.itzi.itzi.recruitings.dto.request.RecruitingDraftSaveRequest;
 import com.itzi.itzi.recruitings.dto.response.RecruitingAiGenerateResponse;
+import com.itzi.itzi.recruitings.dto.response.RecruitingDeleteResponse;
 import com.itzi.itzi.recruitings.dto.response.RecruitingDraftSaveResponse;
 import com.itzi.itzi.recruitings.dto.response.RecruitingPublishResponse;
 import com.itzi.itzi.recruitings.service.RecruitService;
@@ -59,6 +60,14 @@ public class RecruitingController {
 
         RecruitingPublishResponse response = recruitService.publishRecruiting(postId);
 
+        return ApiResponse.of(SuccessStatus._OK, response);
+    }
+
+    // 게시물 삭제
+    @DeleteMapping("/{postId}")
+    public ApiResponse<RecruitingDeleteResponse> deleteRecruiting(@PathVariable Long postId) {
+
+        RecruitingDeleteResponse response = recruitService.deleteRecruiting(postId);
         return ApiResponse.of(SuccessStatus._OK, response);
     }
 }

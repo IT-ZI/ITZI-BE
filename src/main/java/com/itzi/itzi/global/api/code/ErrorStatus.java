@@ -16,6 +16,7 @@ public enum ErrorStatus implements BaseErrorCode {
     DATE_RANGE_INVALID(HttpStatus.BAD_REQUEST, "E-400-04", "종료일은 시작일보다 빠를 수 없습니다."),
     NOT_FOUND(HttpStatus.NOT_FOUND, "E-404", "대상을 찾을 수 없습니다."),
     ALREADY_PUBLISHED(HttpStatus.CONFLICT, "E-409-01", "이미 게시된 글입니다."),
+    CANNOT_DELETE_POST(HttpStatus.CONFLICT, "E-409-02", "해당 상태의 글은 삭제할 수 없습니다."),
 
     // Gemini
     GEMINI_BLOCKED(HttpStatus.BAD_REQUEST, "A-400-01", "Gemini 응답이 정책에 의해 차단되었습니다."),
