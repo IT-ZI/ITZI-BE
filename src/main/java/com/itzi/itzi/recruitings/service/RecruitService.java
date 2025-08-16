@@ -12,6 +12,7 @@ import com.itzi.itzi.recruitings.dto.request.RecruitingAiGenerateRequest;
 import com.itzi.itzi.recruitings.dto.request.RecruitingDraftSaveRequest;
 import com.itzi.itzi.recruitings.dto.response.RecruitingAiGenerateResponse;
 import com.itzi.itzi.recruitings.dto.response.RecruitingDraftSaveResponse;
+import com.itzi.itzi.recruitings.dto.response.RecruitingPublishResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,6 +24,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -365,5 +367,44 @@ public class RecruitService {
         if (request.getTargetNegotiable() != null) e.setTargetNegotiable(request.getTargetNegotiable());
         if (request.getConditionNegotiable() != null) e.setConditionNegotiable(request.getConditionNegotiable());
 
+    }
+
+    // 제휴 홍보글 게시하기
+    @Transactional
+    public RecruitingPublishResponse publishRecruiting(Long postId) {
+
+        // 존재하는 게시글인지 확인
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
+
+        // 이미 게시된 글인지 확인
+        if (post.getStatus() == Status.PUBLISHED) {
+            throw new GeneralException(ErrorStatus.ALREADY_PUBLISHED);
+        }
+
+        // 제휴 모집글 게시를 위해서는 모든 필드가 작성돼야 함
+        if (post.getPostImage() == null ||
+            post.getTitle() == null || post.getTitle().isBlank() ||
+            post.getTarget() == null || post.getTarget().isBlank() ||
+            post.getStartDate() == null || post.getEndDate() == null ||
+            post.getBenefit() ==  null || post.getBenefit().isBlank() ||
+            post.getCondition() == null || post.getCondition().isBlank() ||
+            post.getContent() == null || post.getContent().isBlank() ||
+            post.getExposureEndDate() == null ) {
+            throw new GeneralException(ErrorStatus.REQUIRED_FIELD_MISSING);
+        }
+
+        // 게시 상태로 변경 및 생성 시간 업데이트
+        post.setStatus(Status.PUBLISHED);
+        post.setCreatedAt(LocalDateTime.now());
+
+        postRepository.save(post);
+
+        return new RecruitingPublishResponse(
+                Type.RECRUITING,
+                post.getPostId(),
+                post.getStatus(),
+                post.getCreatedAt()
+        );
     }
 }
