@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itzi.itzi.global.api.code.ErrorStatus;
 import com.itzi.itzi.global.exception.GeneralException;
+import com.itzi.itzi.global.s3.S3Service;
 import com.itzi.itzi.posts.domain.Post;
 import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
@@ -19,7 +20,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -36,6 +39,7 @@ import java.util.regex.Pattern;
 public class RecruitService {
 
     private final PostRepository postRepository;
+    private final S3Service s3Service;
 
     @Value("${gemini.api.key}")
     private String apiKey;
@@ -44,7 +48,7 @@ public class RecruitService {
             "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
 
-    public RecruitingAiGenerateResponse generateRecruitingAi(Long userId, Type type, String postImage, RecruitingAiGenerateRequest request) {
+    public RecruitingAiGenerateResponse generateRecruitingAi(Long userId, Type type, RecruitingAiGenerateRequest request) {
 
         // 1. 검증 : 날짜 역전 금지, 모든 필드 작성
         validate(type, request);
@@ -56,11 +60,9 @@ public class RecruitService {
         String endpoint = GEMINI_ENDPOINT + "?key=" + apiKey;
         String content = callGemini(endpoint, prompt);
 
-        // 4. 결과 저장
-        Post saved = postRepository.save(
-                Post.builder()
+        // 4. 이미지를 제외한 엔티티 구성
+        Post entity = Post.builder()
                         .type(Type.RECRUITING)
-                        .postImage(hasText(postImage) ? postImage.trim() : null)
                         .title(request.getTitle().trim())
                         .target(request.getTarget().trim())
                         .startDate(request.getStartDate())
@@ -68,14 +70,19 @@ public class RecruitService {
                         .benefit(request.getBenefit().trim())
                         .condition(request.getCondition().trim())
                         .content(content)
-                        .targetNegotiable(request.getNegotiables() != null && Boolean.TRUE.equals(request.getNegotiables().getTarget()))
-                        .periodNegotiable(request.getNegotiables() != null && Boolean.TRUE.equals(request.getNegotiables().getPeriod()))
-                        .benefitNegotiable(request.getNegotiables() != null && Boolean.TRUE.equals(request.getNegotiables().getBenefit()))
-                        .conditionNegotiable(request.getNegotiables() != null && Boolean.TRUE.equals(request.getNegotiables().getCondition()))
-                        .exposureEndDate(request.getEndDate())                  // 수정 필요
+                        .targetNegotiable(Boolean.TRUE.equals(request.getTargetNegotiable()))
+                        .periodNegotiable(Boolean.TRUE.equals(request.getPeriodNegotiable()))
+                        .benefitNegotiable(Boolean.TRUE.equals(request.getBenefitNegotiable()))
+                        .conditionNegotiable(Boolean.TRUE.equals(request.getConditionNegotiable()))
+                        .exposureEndDate(request.getExposureEndDate())
                         .status(Status.DRAFT)
-                        .build()
-        );
+                        .build();
+
+        // 5. 이미지 업로드/변경
+        handleImageUpload(entity, request.getPostImage());
+
+        // 6. 저장
+        Post saved = postRepository.save(entity);
 
         // 5. 응답 DTO
         return RecruitingAiGenerateResponse.builder()
@@ -125,8 +132,9 @@ public class RecruitService {
 
     private String buildPrompt(Type type, RecruitingAiGenerateRequest r) {
 
-        String postImageLine = (r.getPostImage() != null && !r.getPostImage().isBlank())
-                ? "\n(이미지: " + r.getPostImage().trim() + ")"
+        // MultipartFile 기준으로 존재 여부만 판단
+        String postImageLine = (r.getPostImage() != null && !r.getPostImage().isEmpty())
+                ? "\n(이미지 첨부됨)"   // 필요 없다면 "" 로 완전 제거해도 됨
                 : "";
 
         // 제목, 타깃에서 학교명 자동 추출
@@ -135,10 +143,10 @@ public class RecruitService {
                 .orElse("00대학교");       // 기본값
 
         // 대상, 기간, 혜택, 조건 협의 가능 문구
-        boolean targetOk = r.getNegotiables() != null && Boolean.TRUE.equals(r.getNegotiables().getTarget());
-        boolean periodOk = r.getNegotiables() != null && Boolean.TRUE.equals(r.getNegotiables().getPeriod());
-        boolean benefitOk = r.getNegotiables() != null && Boolean.TRUE.equals(r.getNegotiables().getBenefit());
-        boolean condOk   = r.getNegotiables() != null && Boolean.TRUE.equals(r.getNegotiables().getCondition());
+        boolean targetOk  = Boolean.TRUE.equals(r.getTargetNegotiable());
+        boolean periodOk  = Boolean.TRUE.equals(r.getPeriodNegotiable());
+        boolean benefitOk = Boolean.TRUE.equals(r.getBenefitNegotiable());
+        boolean condOk    = Boolean.TRUE.equals(r.getConditionNegotiable());
         String periodCondNote = (targetOk || periodOk || benefitOk || condOk ) ? " (대상, 기간, 혜택, 조건 협의 가능)" : "";
 
         return """
@@ -301,6 +309,7 @@ public class RecruitService {
 
             // 2) 부분 업데이트(널이면 무시, 값이 있으면 반영)
             applyPatch(entity, request);
+            handleImageUpload(entity, request.getPostImage());
 
         } else {
             // 새 DRAFT 글 생성
@@ -309,6 +318,7 @@ public class RecruitService {
                     .bookmarkCount(0L)
                     .build();
             applyPatch(entity, request);
+            handleImageUpload(entity, request.getPostImage());
         }
 
         // 항상 DRAFT 상태 유지
@@ -326,10 +336,27 @@ public class RecruitService {
         );
     }
 
+    // 이미지 업로드/변경
+    private void handleImageUpload(Post entity, MultipartFile file) {
+        if (file == null || file.isEmpty()) return;
+
+        try {
+            // 기존 이미지가 존재한다면 삭제
+            if (entity.getPostImage() != null && !entity.getPostImage().isBlank()) {
+                s3Service.deleteImageUrl(entity.getPostImage());
+            }
+
+            String uploadUrl = s3Service.upload(file);
+            entity.setPostImage(uploadUrl);
+        } catch (IOException e) {
+            throw new GeneralException(ErrorStatus.INTERNAL_ERROR, "이미지 업로드에 실패했습니다.");
+        }
+    }
+
     // 임시 저장을 하기 위해서는 최소 1개 이상의 필드가 작성돼 있어야 함
     private void validateHasAnyDraftField(RecruitingDraftSaveRequest request) {
         boolean hasAny =
-                hasText(request.getPostImage()) ||
+                request.getPostImage() != null && !request.getPostImage().isEmpty() ||
                 hasText(request.getTitle()) ||
                 hasText(request.getTarget()) ||
                 request.getStartDate() != null || request.getEndDate() != null ||
@@ -350,7 +377,6 @@ public class RecruitService {
 
     // 작성한 부분만 업데이트 (null이면 업데이트 X)
     private void applyPatch(Post e, RecruitingDraftSaveRequest request) {
-        if (hasText(request.getPostImage())) e.setPostImage(request.getPostImage());
         if (hasText(request.getTitle())) e.setTitle(request.getTitle());
         if (hasText(request.getTarget())) e.setTarget(request.getTarget());
 
