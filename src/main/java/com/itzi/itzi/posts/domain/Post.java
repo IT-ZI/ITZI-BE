@@ -2,9 +2,8 @@ package com.itzi.itzi.posts.domain;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -15,7 +14,6 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@EntityListeners(AuditingEntityListener.class)
 public class Post {
 
     @Id
@@ -43,7 +41,7 @@ public class Post {
     @Column(length = 120)
     private String benefit;         // 제휴 혜택
 
-    @Column(name = "`condition`", length = 120, columnDefinition = "TEXT")
+    @Column(name = "`condition`", length = 120)
     private String condition;       // 제휴 조건
 
     @Column(columnDefinition = "TEXT")
@@ -75,11 +73,11 @@ public class Post {
     @Builder.Default
     private Long bookmarkCount = 0L;
 
-    @CreatedDate
+    @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @LastModifiedDate
+    @UpdateTimestamp
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
