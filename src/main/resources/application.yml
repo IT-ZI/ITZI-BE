@@ -30,3 +30,14 @@
     api:
       key: ${GEMINI_API_KEY}
 
+  cloud:
+    aws:
+      s3:
+        bucket-name: itzi-bucket
+      credentials:
+        access-key: ${AWS_ACCESS_KEY}
+        secret-key: ${AWS_SECRET_KEY}
+      region:
+        static: ap-northeast-2
+      stack:
+        auto: false
