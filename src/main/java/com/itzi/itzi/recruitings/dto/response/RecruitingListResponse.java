@@ -6,7 +6,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 
@@ -16,12 +15,16 @@ import java.time.LocalDate;
 @AllArgsConstructor
 public class RecruitingListResponse {
 
-    private Type type;
-
     private Long postId;
     private Long userId;
 
-    private MultipartFile postImageUrl;
+    private Type type;
+    private Status status;
+
+    private LocalDate exposureEndDate;
+    private Long bookmarkCount;
+
+    private String postImageUrl;
     private String title;
     private String target;
     private LocalDate startDate;
@@ -32,8 +35,6 @@ public class RecruitingListResponse {
     private boolean periodNegotiable;
     private boolean benefitNegotiable;
 
-    private Long bookmarkCount;
 
-    private Status status;
 
 }

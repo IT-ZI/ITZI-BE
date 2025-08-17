@@ -26,6 +26,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -482,6 +483,38 @@ public class RecruitService {
                 .conditionNegotiable(post.isConditionNegotiable())
                 .postImageUrl(post.getPostImage())
                 .content(post.getContent())
+                .build();
+    }
+
+    // 내가 작성한 게시글 전체 리스트 조회 (userId = 1 고정)
+    @Transactional(readOnly = true)
+    public List<RecruitingListResponse> getMyRecruitingList(Type type) {
+        Long FIXED_USER_ID = 1L;
+        List<Status> statuses = List.of(Status.DRAFT, Status.PUBLISHED);
+
+        return postRepository.findByUserIdAndTypeAndStatusIn(FIXED_USER_ID, type, statuses)
+                .stream()
+                .map(this::toListResponse)
+                .toList();
+    }
+
+    private RecruitingListResponse toListResponse(Post post) {
+        return RecruitingListResponse.builder()
+                .postId(post.getPostId())
+                .userId(post.getUserId())
+                .type(post.getType())
+                .status(post.getStatus())
+                .exposureEndDate(post.getExposureEndDate())
+                .bookmarkCount(post.getBookmarkCount())
+                .postImageUrl(post.getPostImage())
+                .title(post.getTitle())
+                .target(post.getTarget())
+                .startDate(post.getStartDate())
+                .endDate(post.getEndDate())
+                .benefit(post.getBenefit())
+                .targetNegotiable(post.isTargetNegotiable())
+                .periodNegotiable(post.isPeriodNegotiable())
+                .benefitNegotiable(post.isBenefitNegotiable())
                 .build();
     }
 }

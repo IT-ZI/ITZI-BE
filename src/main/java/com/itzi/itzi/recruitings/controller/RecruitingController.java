@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/recruiting")
 @RequiredArgsConstructor
@@ -70,6 +72,15 @@ public class RecruitingController {
     public ApiResponse<RecruitingDetailResponse> getRecruitingDetail(@PathVariable Long postId) {
 
         RecruitingDetailResponse response = recruitService.getRecruitingDetail(postId);
+        return ApiResponse.of(SuccessStatus._OK, response);
+    }
+
+    // 내가 작성한 게시글 전체 조회 (userId = 1)
+    @GetMapping("/mine")
+    public ApiResponse<List<RecruitingListResponse>> getMyRecruitingList(
+            @RequestParam(defaultValue = "RECRUITING") Type type
+    ) {
+        List<RecruitingListResponse> response = recruitService.getMyRecruitingList(type);
         return ApiResponse.of(SuccessStatus._OK, response);
     }
 }
