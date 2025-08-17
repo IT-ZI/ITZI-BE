@@ -83,4 +83,13 @@ public class RecruitingController {
         List<RecruitingListResponse> response = recruitService.getMyRecruitingList(type);
         return ApiResponse.of(SuccessStatus._OK, response);
     }
+
+    // 모든 사용자가 작성한 제휴 모집글 조회
+    @GetMapping("/all")
+    public ApiResponse<List<RecruitingListResponse>> getAllRecruitingList(
+            @RequestParam(defaultValue = "RECRUITING") Type type
+    ) {
+        List<RecruitingListResponse> responses = recruitService.getAllRecruitingList(type);
+        return ApiResponse.of(SuccessStatus._OK, responses);
+    }
 }

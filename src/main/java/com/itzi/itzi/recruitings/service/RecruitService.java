@@ -498,6 +498,18 @@ public class RecruitService {
                 .toList();
     }
 
+    // 모든 사용자가 작성한 제휴 모집글 조회
+    @Transactional(readOnly = true)
+    public List<RecruitingListResponse> getAllRecruitingList(Type type) {
+        Status status = Status.PUBLISHED;           // 게시된 게시물만 조회
+
+        return postRepository.findByTypeAndStatus(type, status)
+                .stream()
+                .map(this::toListResponse)
+                .toList();
+    }
+
+
     private RecruitingListResponse toListResponse(Post post) {
         return RecruitingListResponse.builder()
                 .postId(post.getPostId())

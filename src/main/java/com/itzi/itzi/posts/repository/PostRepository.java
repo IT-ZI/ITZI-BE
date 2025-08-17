@@ -17,4 +17,8 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             Collection<Status> statuses
     );
 
+    // 모든 사용자가 작성한 제휴 모집글
+    List<Post> findByTypeAndStatus(Type type, Status status);
+
+
 }
