@@ -424,7 +424,7 @@ public class RecruitService {
 
         // 게시 상태로 변경 및 생성 시간 업데이트
         post.setStatus(Status.PUBLISHED);
-        post.setCreatedAt(LocalDateTime.now());
+        post.setPublishedAt(LocalDateTime.now());
 
         postRepository.save(post);
 
@@ -432,7 +432,7 @@ public class RecruitService {
                 Type.RECRUITING,
                 post.getPostId(),
                 post.getStatus(),
-                post.getCreatedAt()
+                post.getPublishedAt()
         );
     }
 
@@ -528,12 +528,12 @@ public class RecruitService {
 
             case LATEST -> {
                 posts = postRepository.findByTypeAndStatus(
-                        type, status, Sort.by(Sort.Direction.DESC, "createdAt"));
+                        type, status, Sort.by(Sort.Direction.DESC, "publishedAt"));
             }
 
             case OLDEST -> {
                 posts = postRepository.findByTypeAndStatus(
-                        type, status, Sort.by(Sort.Direction.ASC, "createdAt"));
+                        type, status, Sort.by(Sort.Direction.ASC, "publishedAt"));
             }
         }
         return posts.stream().map(this::toListResponse).toList();

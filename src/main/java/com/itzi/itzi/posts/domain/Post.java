@@ -85,4 +85,6 @@ public class Post {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
+    private LocalDateTime publishedAt;
+
 }
