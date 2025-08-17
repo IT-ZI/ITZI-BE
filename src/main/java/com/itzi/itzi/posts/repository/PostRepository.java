@@ -3,8 +3,10 @@ package com.itzi.itzi.posts.repository;
 import com.itzi.itzi.posts.domain.Post;
 import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 
@@ -17,8 +19,13 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             Collection<Status> statuses
     );
 
-    // 모든 사용자가 작성한 제휴 모집글
-    List<Post> findByTypeAndStatus(Type type, Status status);
+    // 모든 사용자가 작성한 제휴 모집글 필터링 조회 : 인기순, 최신순, 오래된순
+    List<Post> findByTypeAndStatus(Type type, Status status, Sort sort);
+
+    // 모든 사용자가 작성한 제휴 모집글 필터링 조회 : 마감 임박순
+    List<Post> findByTypeAndStatusAndExposureEndDateGreaterThanEqual(
+            Type type, Status status, LocalDate today, Sort sort
+    );
 
 
 }

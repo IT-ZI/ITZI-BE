@@ -2,6 +2,7 @@ package com.itzi.itzi.recruitings.controller;
 
 import com.itzi.itzi.global.api.code.SuccessStatus;
 import com.itzi.itzi.global.api.dto.ApiResponse;
+import com.itzi.itzi.posts.domain.OrderBy;
 import com.itzi.itzi.posts.domain.Type;
 import com.itzi.itzi.recruitings.dto.request.RecruitingAiGenerateRequest;
 import com.itzi.itzi.recruitings.dto.request.RecruitingDraftSaveRequest;
@@ -87,9 +88,10 @@ public class RecruitingController {
     // 모든 사용자가 작성한 제휴 모집글 조회
     @GetMapping("/all")
     public ApiResponse<List<RecruitingListResponse>> getAllRecruitingList(
-            @RequestParam(defaultValue = "RECRUITING") Type type
+            @RequestParam(defaultValue = "RECRUITING") Type type,
+            @RequestParam(defaultValue = "CLOSING") OrderBy orderBy
     ) {
-        List<RecruitingListResponse> responses = recruitService.getAllRecruitingList(type);
+        List<RecruitingListResponse> responses = recruitService.getAllRecruitingList(type, orderBy);
         return ApiResponse.of(SuccessStatus._OK, responses);
     }
 }

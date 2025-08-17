@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itzi.itzi.global.api.code.ErrorStatus;
 import com.itzi.itzi.global.exception.GeneralException;
 import com.itzi.itzi.global.s3.S3Service;
+import com.itzi.itzi.posts.domain.OrderBy;
 import com.itzi.itzi.posts.domain.Post;
 import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
@@ -15,6 +16,7 @@ import com.itzi.itzi.recruitings.dto.response.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -26,6 +28,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -500,13 +503,40 @@ public class RecruitService {
 
     // 모든 사용자가 작성한 제휴 모집글 조회
     @Transactional(readOnly = true)
-    public List<RecruitingListResponse> getAllRecruitingList(Type type) {
+    public List<RecruitingListResponse> getAllRecruitingList(Type type, OrderBy orderBy) {
         Status status = Status.PUBLISHED;           // 게시된 게시물만 조회
 
-        return postRepository.findByTypeAndStatus(type, status)
-                .stream()
-                .map(this::toListResponse)
-                .toList();
+        List<Post> posts = new ArrayList<>();
+
+        // 기본 정렬 기준: 마감 임박순
+        if (orderBy == null) {
+            orderBy = OrderBy.CLOSING;
+        }
+
+        switch (orderBy) {
+            case CLOSING -> {
+                LocalDate today = LocalDate.now();
+                posts = postRepository.findByTypeAndStatusAndExposureEndDateGreaterThanEqual(
+                        type, status, today, Sort.by(Sort.Direction.ASC, "exposureEndDate")
+                );
+            }
+
+            case POPULAR -> {
+                posts = postRepository.findByTypeAndStatus(
+                        type, status, Sort.by(Sort.Direction.DESC, "bookmarkCount"));
+            }
+
+            case LATEST -> {
+                posts = postRepository.findByTypeAndStatus(
+                        type, status, Sort.by(Sort.Direction.DESC, "createdAt"));
+            }
+
+            case OLDEST -> {
+                posts = postRepository.findByTypeAndStatus(
+                        type, status, Sort.by(Sort.Direction.ASC, "createdAt"));
+            }
+        }
+        return posts.stream().map(this::toListResponse).toList();
     }
 
 
