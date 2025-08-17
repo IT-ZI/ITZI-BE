@@ -11,10 +11,7 @@ import com.itzi.itzi.posts.domain.Type;
 import com.itzi.itzi.posts.repository.PostRepository;
 import com.itzi.itzi.recruitings.dto.request.RecruitingAiGenerateRequest;
 import com.itzi.itzi.recruitings.dto.request.RecruitingDraftSaveRequest;
-import com.itzi.itzi.recruitings.dto.response.RecruitingAiGenerateResponse;
-import com.itzi.itzi.recruitings.dto.response.RecruitingDeleteResponse;
-import com.itzi.itzi.recruitings.dto.response.RecruitingDraftSaveResponse;
-import com.itzi.itzi.recruitings.dto.response.RecruitingPublishResponse;
+import com.itzi.itzi.recruitings.dto.response.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -456,5 +453,35 @@ public class RecruitService {
                 post.getPostId(),
                 post.getStatus()
         );
+    }
+
+    // 작성한 게시글 단건 상세 내용 조회
+    @Transactional(readOnly = true)
+    public RecruitingDetailResponse getRecruitingDetail(Long postId) {
+
+        // 존재하는 게시글인지 확인
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
+
+        return RecruitingDetailResponse.builder()
+                .userId(1L)                     // userId는 1로 고정
+                .postId(post.getPostId())
+                .type(post.getType())
+                .status(post.getStatus())
+                .exposureEndDate(post.getExposureEndDate())
+                .bookmarkCount(post.getBookmarkCount())
+                .title(post.getTitle())
+                .target(post.getTarget())
+                .targetNegotiable(post.isTargetNegotiable())
+                .startDate(post.getStartDate())
+                .endDate(post.getEndDate())
+                .periodNegotiable(post.isPeriodNegotiable())
+                .benefit(post.getBenefit())
+                .benefitNegotiable(post.isBenefitNegotiable())
+                .condition(post.getCondition())
+                .conditionNegotiable(post.isConditionNegotiable())
+                .postImageUrl(post.getPostImage())
+                .content(post.getContent())
+                .build();
     }
 }

@@ -5,14 +5,10 @@ import com.itzi.itzi.global.api.dto.ApiResponse;
 import com.itzi.itzi.posts.domain.Type;
 import com.itzi.itzi.recruitings.dto.request.RecruitingAiGenerateRequest;
 import com.itzi.itzi.recruitings.dto.request.RecruitingDraftSaveRequest;
-import com.itzi.itzi.recruitings.dto.response.RecruitingAiGenerateResponse;
-import com.itzi.itzi.recruitings.dto.response.RecruitingDeleteResponse;
-import com.itzi.itzi.recruitings.dto.response.RecruitingDraftSaveResponse;
-import com.itzi.itzi.recruitings.dto.response.RecruitingPublishResponse;
+import com.itzi.itzi.recruitings.dto.response.*;
 import com.itzi.itzi.recruitings.service.RecruitService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -66,6 +62,14 @@ public class RecruitingController {
     public ApiResponse<RecruitingDeleteResponse> deleteRecruiting(@PathVariable Long postId) {
 
         RecruitingDeleteResponse response = recruitService.deleteRecruiting(postId);
+        return ApiResponse.of(SuccessStatus._OK, response);
+    }
+
+    // 작성한 게시글 단건 상세 내용 조회
+    @GetMapping("/{postId}")
+    public ApiResponse<RecruitingDetailResponse> getRecruitingDetail(@PathVariable Long postId) {
+
+        RecruitingDetailResponse response = recruitService.getRecruitingDetail(postId);
         return ApiResponse.of(SuccessStatus._OK, response);
     }
 }
