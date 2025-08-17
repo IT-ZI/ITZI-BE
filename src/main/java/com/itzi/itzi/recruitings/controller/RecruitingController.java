@@ -2,18 +2,17 @@ package com.itzi.itzi.recruitings.controller;
 
 import com.itzi.itzi.global.api.code.SuccessStatus;
 import com.itzi.itzi.global.api.dto.ApiResponse;
+import com.itzi.itzi.posts.domain.OrderBy;
 import com.itzi.itzi.posts.domain.Type;
 import com.itzi.itzi.recruitings.dto.request.RecruitingAiGenerateRequest;
 import com.itzi.itzi.recruitings.dto.request.RecruitingDraftSaveRequest;
-import com.itzi.itzi.recruitings.dto.response.RecruitingAiGenerateResponse;
-import com.itzi.itzi.recruitings.dto.response.RecruitingDeleteResponse;
-import com.itzi.itzi.recruitings.dto.response.RecruitingDraftSaveResponse;
-import com.itzi.itzi.recruitings.dto.response.RecruitingPublishResponse;
+import com.itzi.itzi.recruitings.dto.response.*;
 import com.itzi.itzi.recruitings.service.RecruitService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/recruiting")
@@ -67,5 +66,32 @@ public class RecruitingController {
 
         RecruitingDeleteResponse response = recruitService.deleteRecruiting(postId);
         return ApiResponse.of(SuccessStatus._OK, response);
+    }
+
+    // 작성한 게시글 단건 상세 내용 조회
+    @GetMapping("/{postId}")
+    public ApiResponse<RecruitingDetailResponse> getRecruitingDetail(@PathVariable Long postId) {
+
+        RecruitingDetailResponse response = recruitService.getRecruitingDetail(postId);
+        return ApiResponse.of(SuccessStatus._OK, response);
+    }
+
+    // 내가 작성한 게시글 전체 조회 (userId = 1)
+    @GetMapping("/mine")
+    public ApiResponse<List<RecruitingListResponse>> getMyRecruitingList(
+            @RequestParam(defaultValue = "RECRUITING") Type type
+    ) {
+        List<RecruitingListResponse> response = recruitService.getMyRecruitingList(type);
+        return ApiResponse.of(SuccessStatus._OK, response);
+    }
+
+    // 모든 사용자가 작성한 제휴 모집글 조회
+    @GetMapping("/all")
+    public ApiResponse<List<RecruitingListResponse>> getAllRecruitingList(
+            @RequestParam(defaultValue = "RECRUITING") Type type,
+            @RequestParam(defaultValue = "CLOSING") OrderBy orderBy
+    ) {
+        List<RecruitingListResponse> responses = recruitService.getAllRecruitingList(type, orderBy);
+        return ApiResponse.of(SuccessStatus._OK, responses);
     }
 }

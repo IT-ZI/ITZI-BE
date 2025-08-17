@@ -19,6 +19,6 @@ public class RecruitingPublishResponse {
     private Status status;
 
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'", timezone = "Asia/Seoul")
-    private LocalDateTime createdAt;
+    private LocalDateTime publishedAt;
 
 }

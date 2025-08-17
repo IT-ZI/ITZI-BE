@@ -5,19 +5,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itzi.itzi.global.api.code.ErrorStatus;
 import com.itzi.itzi.global.exception.GeneralException;
 import com.itzi.itzi.global.s3.S3Service;
+import com.itzi.itzi.posts.domain.OrderBy;
 import com.itzi.itzi.posts.domain.Post;
 import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
 import com.itzi.itzi.posts.repository.PostRepository;
 import com.itzi.itzi.recruitings.dto.request.RecruitingAiGenerateRequest;
 import com.itzi.itzi.recruitings.dto.request.RecruitingDraftSaveRequest;
-import com.itzi.itzi.recruitings.dto.response.RecruitingAiGenerateResponse;
-import com.itzi.itzi.recruitings.dto.response.RecruitingDeleteResponse;
-import com.itzi.itzi.recruitings.dto.response.RecruitingDraftSaveResponse;
-import com.itzi.itzi.recruitings.dto.response.RecruitingPublishResponse;
+import com.itzi.itzi.recruitings.dto.response.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -29,6 +28,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -423,7 +424,7 @@ public class RecruitService {
 
         // 게시 상태로 변경 및 생성 시간 업데이트
         post.setStatus(Status.PUBLISHED);
-        post.setCreatedAt(LocalDateTime.now());
+        post.setPublishedAt(LocalDateTime.now());
 
         postRepository.save(post);
 
@@ -431,7 +432,7 @@ public class RecruitService {
                 Type.RECRUITING,
                 post.getPostId(),
                 post.getStatus(),
-                post.getCreatedAt()
+                post.getPublishedAt()
         );
     }
 
@@ -456,5 +457,106 @@ public class RecruitService {
                 post.getPostId(),
                 post.getStatus()
         );
+    }
+
+    // 작성한 게시글 단건 상세 내용 조회
+    @Transactional(readOnly = true)
+    public RecruitingDetailResponse getRecruitingDetail(Long postId) {
+
+        // 존재하는 게시글인지 확인
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
+
+        return RecruitingDetailResponse.builder()
+                .userId(1L)                     // userId는 1로 고정
+                .postId(post.getPostId())
+                .type(post.getType())
+                .status(post.getStatus())
+                .exposureEndDate(post.getExposureEndDate())
+                .bookmarkCount(post.getBookmarkCount())
+                .title(post.getTitle())
+                .target(post.getTarget())
+                .targetNegotiable(post.isTargetNegotiable())
+                .startDate(post.getStartDate())
+                .endDate(post.getEndDate())
+                .periodNegotiable(post.isPeriodNegotiable())
+                .benefit(post.getBenefit())
+                .benefitNegotiable(post.isBenefitNegotiable())
+                .condition(post.getCondition())
+                .conditionNegotiable(post.isConditionNegotiable())
+                .postImageUrl(post.getPostImage())
+                .content(post.getContent())
+                .build();
+    }
+
+    // 내가 작성한 게시글 전체 리스트 조회 (userId = 1 고정)
+    @Transactional(readOnly = true)
+    public List<RecruitingListResponse> getMyRecruitingList(Type type) {
+        Long FIXED_USER_ID = 1L;
+        List<Status> statuses = List.of(Status.DRAFT, Status.PUBLISHED);
+
+        return postRepository.findByUserIdAndTypeAndStatusIn(FIXED_USER_ID, type, statuses)
+                .stream()
+                .map(this::toListResponse)
+                .toList();
+    }
+
+    // 모든 사용자가 작성한 제휴 모집글 조회
+    @Transactional(readOnly = true)
+    public List<RecruitingListResponse> getAllRecruitingList(Type type, OrderBy orderBy) {
+        Status status = Status.PUBLISHED;           // 게시된 게시물만 조회
+
+        List<Post> posts = new ArrayList<>();
+
+        // 기본 정렬 기준: 마감 임박순
+        if (orderBy == null) {
+            orderBy = OrderBy.CLOSING;
+        }
+
+        switch (orderBy) {
+            case CLOSING -> {
+                LocalDate today = LocalDate.now();
+                posts = postRepository.findByTypeAndStatusAndExposureEndDateGreaterThanEqual(
+                        type, status, today, Sort.by(Sort.Direction.ASC, "exposureEndDate")
+                );
+            }
+
+            case POPULAR -> {
+                posts = postRepository.findByTypeAndStatus(
+                        type, status, Sort.by(Sort.Direction.DESC, "bookmarkCount"));
+            }
+
+            case LATEST -> {
+                posts = postRepository.findByTypeAndStatus(
+                        type, status, Sort.by(Sort.Direction.DESC, "publishedAt"));
+            }
+
+            case OLDEST -> {
+                posts = postRepository.findByTypeAndStatus(
+                        type, status, Sort.by(Sort.Direction.ASC, "publishedAt"));
+            }
+        }
+        return posts.stream().map(this::toListResponse).toList();
+    }
+
+
+    private RecruitingListResponse toListResponse(Post post) {
+        return RecruitingListResponse.builder()
+                .postId(post.getPostId())
+                .userId(post.getUserId())
+                .type(post.getType())
+                .status(post.getStatus())
+                .exposureEndDate(post.getExposureEndDate())
+                .bookmarkCount(post.getBookmarkCount())
+                .postImageUrl(post.getPostImage())
+                .title(post.getTitle())
+                .target(post.getTarget())
+                .startDate(post.getStartDate())
+                .endDate(post.getEndDate())
+                .benefit(post.getBenefit())
+                .targetNegotiable(post.isTargetNegotiable())
+                .periodNegotiable(post.isPeriodNegotiable())
+                .benefitNegotiable(post.isBenefitNegotiable())
+                .build();
     }
 }
