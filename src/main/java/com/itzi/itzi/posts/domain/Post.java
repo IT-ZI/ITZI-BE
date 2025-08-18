@@ -87,4 +87,8 @@ public class Post {
 
     private LocalDateTime publishedAt;
 
+    // 제휴 제안자, 대상자
+    private Boolean exposeProposerInfo;
+    private Boolean exposeTargetInfo;
+
 }
