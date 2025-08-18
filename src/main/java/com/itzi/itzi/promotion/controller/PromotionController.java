@@ -2,7 +2,9 @@ package com.itzi.itzi.promotion.controller;
 
 import com.itzi.itzi.global.api.code.SuccessStatus;
 import com.itzi.itzi.global.api.dto.ApiResponse;
+import com.itzi.itzi.promotion.dto.request.PromotionDraftSaveRequest;
 import com.itzi.itzi.promotion.dto.request.PromotionManualPublishRequest;
+import com.itzi.itzi.promotion.dto.response.PromotionDraftSaveResponse;
 import com.itzi.itzi.promotion.dto.response.PromotionManualPublishResponse;
 import com.itzi.itzi.promotion.service.PromotionService;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,17 @@ public class PromotionController {
 
         Long fixedUserId = 1L;                 // 항상 1
         PromotionManualPublishResponse response = promotionService.promotionManualPublish(fixedUserId, request);
+
+        return ApiResponse.of(SuccessStatus._OK, response);
+    }
+
+    // 제휴 게시글 임시 저장
+    @PostMapping("/draft")
+    public ApiResponse<PromotionDraftSaveResponse> promotionDraft(
+            @ModelAttribute PromotionDraftSaveRequest request
+    ) {
+        Long fixedUserId = 1L;
+        PromotionDraftSaveResponse response = promotionService.promotionDraft(fixedUserId, request);
 
         return ApiResponse.of(SuccessStatus._OK, response);
     }
