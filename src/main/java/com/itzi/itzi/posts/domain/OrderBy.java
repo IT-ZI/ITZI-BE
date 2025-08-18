@@ -4,7 +4,7 @@ package com.itzi.itzi.posts.domain;
 public enum OrderBy {
     CLOSING,            // exposureEndDate
     POPULAR,             // bookmarkCount
-    LATEST,             // createdAt DESC
-    OLDEST              // createdAt ASC
+    LATEST,             // publishedAt DESC
+    OLDEST              // publishedAt ASC
 
 }
