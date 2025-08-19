@@ -2,6 +2,7 @@ package com.itzi.itzi.promotion.controller;
 
 import com.itzi.itzi.global.api.code.SuccessStatus;
 import com.itzi.itzi.global.api.dto.ApiResponse;
+import com.itzi.itzi.posts.domain.OrderBy;
 import com.itzi.itzi.posts.domain.Type;
 import com.itzi.itzi.promotion.dto.request.PromotionDraftSaveRequest;
 import com.itzi.itzi.promotion.dto.request.PromotionManualPublishRequest;
@@ -78,6 +79,17 @@ public class PromotionController {
     public ApiResponse<PromotionDeleteResponse> delete(@PathVariable Long postId) {
 
         PromotionDeleteResponse response = promotionService.delete(postId);
+        return ApiResponse.of(SuccessStatus._OK, response);
+
+    }
+
+    // 모든 사용자가 작성한 제휴 홍보 게시글 목록 조회
+    @GetMapping("/all")
+    public ApiResponse<List<PromotionListResponse>> getAllPromotionList(
+            @RequestParam Type type,
+            @RequestParam(defaultValue = "CLOSING") OrderBy orderBy
+    ) {
+        List<PromotionListResponse> response = promotionService.getAllPromotionList(type, orderBy);
         return ApiResponse.of(SuccessStatus._OK, response);
 
     }

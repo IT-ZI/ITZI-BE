@@ -3,6 +3,7 @@ package com.itzi.itzi.promotion.service;
 import com.itzi.itzi.global.api.code.ErrorStatus;
 import com.itzi.itzi.global.exception.GeneralException;
 import com.itzi.itzi.global.s3.S3Service;
+import com.itzi.itzi.posts.domain.OrderBy;
 import com.itzi.itzi.posts.domain.Post;
 import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
@@ -10,9 +11,9 @@ import com.itzi.itzi.posts.repository.PostRepository;
 import com.itzi.itzi.promotion.dto.request.PromotionDraftSaveRequest;
 import com.itzi.itzi.promotion.dto.request.PromotionManualPublishRequest;
 import com.itzi.itzi.promotion.dto.response.*;
-import com.itzi.itzi.recruitings.dto.response.RecruitingPublishResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -20,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.springframework.util.StringUtils.hasText;
@@ -247,6 +249,50 @@ public class PromotionService {
                 post.getStatus()
 
         );
+    }
+
+    // 모든 사용자가 작성한 제휴 홍보 게시글 카드뷰 조회
+    @Transactional(readOnly = true)
+    public List<PromotionListResponse> getAllPromotionList(Type type, OrderBy orderBy) {
+        Status status = Status.PUBLISHED;       // 게시된 홍보 게시글만 조회
+
+        // 타입 검증: PROMOTION이 아니면 에러
+        if (type != Type.PROMOTION) {
+            throw new GeneralException(ErrorStatus.INVALID_TYPE, "제휴 홍보글만 조회할 수 있습니다.");
+        }
+
+        List<Post> posts = new ArrayList<>();
+
+        // 기본 정렬 : 마감임박순
+        if (orderBy == null) {
+            orderBy = OrderBy.CLOSING;
+        }
+
+        switch (orderBy) {
+            case CLOSING -> {
+                LocalDate today = LocalDate.now();
+                posts = postRepository.findByTypeAndStatusAndExposureEndDateGreaterThanEqual(
+                        type, status, today, Sort.by(Sort.Direction.ASC, "exposureEndDate")
+                );
+            }
+
+            case POPULAR -> {
+                posts = postRepository.findByTypeAndStatus(
+                        type, status, Sort.by(Sort.Direction.DESC, "bookmarkCount"));
+            }
+
+            case LATEST -> {
+                posts = postRepository.findByTypeAndStatus(
+                        type, status, Sort.by(Sort.Direction.DESC, "publishedAt"));
+            }
+
+            case OLDEST -> {
+                posts = postRepository.findByTypeAndStatus(
+                        type, status, Sort.by(Sort.Direction.ASC, "publishedAt"));
+            }
+        }
+        return posts.stream().map(this::toListResponse).toList();
+
     }
 
     // 내가 작성한 제휴 홍보 게시글 카드뷰 조회
