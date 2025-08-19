@@ -9,6 +9,7 @@ import com.itzi.itzi.posts.domain.Type;
 import com.itzi.itzi.posts.repository.PostRepository;
 import com.itzi.itzi.promotion.dto.request.PromotionDraftSaveRequest;
 import com.itzi.itzi.promotion.dto.request.PromotionManualPublishRequest;
+import com.itzi.itzi.promotion.dto.response.PromotionDeleteResponse;
 import com.itzi.itzi.promotion.dto.response.PromotionDraftSaveResponse;
 import com.itzi.itzi.promotion.dto.response.PromotionEditViewResponse;
 import com.itzi.itzi.promotion.dto.response.PromotionManualPublishResponse;
@@ -194,6 +195,28 @@ public class PromotionService {
 
         Post saved = postRepository.save(post);
         return buildPublishResponse(saved);
+    }
+
+    // 제휴 게시글 삭제하기
+    @Transactional
+    public PromotionDeleteResponse delete(Long postId) {
+
+        Post post = postRepository.findById(postId).orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
+
+        // 게시된 글만 삭제 가능
+        if (post.getStatus() != Status.PUBLISHED) {
+            throw new GeneralException(ErrorStatus.CANNOT_DELETE_POST);
+        }
+
+        post.setStatus(Status.DELETED);
+        postRepository.save(post);
+
+        return new PromotionDeleteResponse(
+                post.getPostId(),
+                Type.RECRUITING,
+                post.getStatus()
+
+        );
     }
 
     private PromotionManualPublishResponse buildPublishResponse(Post saved) {

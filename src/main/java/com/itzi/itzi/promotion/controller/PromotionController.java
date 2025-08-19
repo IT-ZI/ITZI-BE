@@ -4,6 +4,7 @@ import com.itzi.itzi.global.api.code.SuccessStatus;
 import com.itzi.itzi.global.api.dto.ApiResponse;
 import com.itzi.itzi.promotion.dto.request.PromotionDraftSaveRequest;
 import com.itzi.itzi.promotion.dto.request.PromotionManualPublishRequest;
+import com.itzi.itzi.promotion.dto.response.PromotionDeleteResponse;
 import com.itzi.itzi.promotion.dto.response.PromotionDraftSaveResponse;
 import com.itzi.itzi.promotion.dto.response.PromotionEditViewResponse;
 import com.itzi.itzi.promotion.dto.response.PromotionManualPublishResponse;
@@ -61,6 +62,15 @@ public class PromotionController {
         Long fixedUserId = 1L;                 // 항상 1
         PromotionManualPublishResponse response = promotionService.republish(fixedUserId, postId, request);
 
+        return ApiResponse.of(SuccessStatus._OK, response);
+
+    }
+
+    // 게시물 삭제하기
+    @DeleteMapping("/{postId}")
+    public ApiResponse<PromotionDeleteResponse> delete(@PathVariable Long postId) {
+
+        PromotionDeleteResponse response = promotionService.delete(postId);
         return ApiResponse.of(SuccessStatus._OK, response);
 
     }
