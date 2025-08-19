@@ -3,6 +3,7 @@ package com.itzi.itzi.promotion.service;
 import com.itzi.itzi.global.api.code.ErrorStatus;
 import com.itzi.itzi.global.exception.GeneralException;
 import com.itzi.itzi.global.s3.S3Service;
+import com.itzi.itzi.posts.domain.OrderBy;
 import com.itzi.itzi.posts.domain.Post;
 import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
@@ -10,9 +11,9 @@ import com.itzi.itzi.posts.repository.PostRepository;
 import com.itzi.itzi.promotion.dto.request.PromotionDraftSaveRequest;
 import com.itzi.itzi.promotion.dto.request.PromotionManualPublishRequest;
 import com.itzi.itzi.promotion.dto.response.*;
-import com.itzi.itzi.recruitings.dto.response.RecruitingPublishResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -20,6 +21,8 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.springframework.util.StringUtils.hasText;
 
@@ -248,6 +251,92 @@ public class PromotionService {
         );
     }
 
+    // 모든 사용자가 작성한 제휴 홍보 게시글 카드뷰 조회
+    @Transactional(readOnly = true)
+    public List<PromotionListResponse> getAllPromotionList(Type type, OrderBy orderBy) {
+        Status status = Status.PUBLISHED;       // 게시된 홍보 게시글만 조회
+
+        // 타입 검증: PROMOTION이 아니면 에러
+        if (type != Type.PROMOTION) {
+            throw new GeneralException(ErrorStatus.INVALID_TYPE, "제휴 홍보글만 조회할 수 있습니다.");
+        }
+
+        List<Post> posts = new ArrayList<>();
+
+        // 기본 정렬 : 마감임박순
+        if (orderBy == null) {
+            orderBy = OrderBy.CLOSING;
+        }
+
+        switch (orderBy) {
+            case CLOSING -> {
+                LocalDate today = LocalDate.now();
+                posts = postRepository.findByTypeAndStatusAndExposureEndDateGreaterThanEqual(
+                        type, status, today, Sort.by(Sort.Direction.ASC, "exposureEndDate")
+                );
+            }
+
+            case POPULAR -> {
+                posts = postRepository.findByTypeAndStatus(
+                        type, status, Sort.by(Sort.Direction.DESC, "bookmarkCount"));
+            }
+
+            case LATEST -> {
+                posts = postRepository.findByTypeAndStatus(
+                        type, status, Sort.by(Sort.Direction.DESC, "publishedAt"));
+            }
+
+            case OLDEST -> {
+                posts = postRepository.findByTypeAndStatus(
+                        type, status, Sort.by(Sort.Direction.ASC, "publishedAt"));
+            }
+        }
+        return posts.stream().map(this::toListResponse).toList();
+
+    }
+
+    // 내가 작성한 제휴 홍보 게시글 카드뷰 조회
+    @Transactional(readOnly = true)
+    public List<PromotionListResponse> getMyPromotionsList(Type type) {
+        Long FIXED_USER_ID = 1L;
+        List<Status> statuses = List.of(Status.DRAFT, Status.PUBLISHED);
+
+        return postRepository.findByUserIdAndTypeAndStatusIn(FIXED_USER_ID, type, statuses)
+                .stream()
+                .map(this::toListResponse)
+                .toList();
+    }
+
+    // 게시된 제휴 홍보글 단건 조회
+    @Transactional(readOnly = true)
+    public PromotionDetailResponse getPromotionDetail(Long postId) {
+
+        // 존재하는 게시글인지 확인
+        Post post = postRepository.findById(postId).orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
+
+        // type이 PROMOTION인지 검증
+        if (post.getType() != Type.PROMOTION) {
+            throw new GeneralException(ErrorStatus.INVALID_TYPE, "해당 게시글은 제휴 홍보글이 아닙니다.");
+        }
+
+        return PromotionDetailResponse.builder()
+                .userId(1L)                     // userId는 1로 고정
+                .postId(post.getPostId())
+                .type(post.getType())
+                .status(post.getStatus())
+                .exposureEndDate(post.getExposureEndDate())
+                .bookmarkCount(post.getBookmarkCount())
+                .postImage(post.getPostImage())
+                .title(post.getTitle())
+                .target(post.getTarget())
+                .startDate(post.getStartDate())
+                .endDate(post.getEndDate())
+                .benefit(post.getBenefit())
+                .condition(post.getCondition())
+                .content(post.getContent())
+                .build();
+    }
+
     private PromotionManualPublishResponse buildPublishResponse(Post saved) {
         return PromotionManualPublishResponse.builder()
                 .type(saved.getType())
@@ -390,6 +479,23 @@ public class PromotionService {
         } catch (IOException e) {
             throw new GeneralException(ErrorStatus.INTERNAL_ERROR, "이미지 업로드에 실패했습니다.");
         }
+    }
+
+    private PromotionListResponse toListResponse(Post post) {
+        return PromotionListResponse.builder()
+                .postId(post.getPostId())
+                .userId(post.getUserId())
+                .type(post.getType())
+                .status(post.getStatus())
+                .bookmarkCount(post.getBookmarkCount())
+                .exposureEndDate(post.getExposureEndDate())
+                .postImage(post.getPostImage())
+                .title(post.getTitle())
+                .target(post.getTarget())
+                .startDate(post.getStartDate())
+                .endDate(post.getEndDate())
+                .benefit(post.getBenefit())
+                .build();
     }
 
 }

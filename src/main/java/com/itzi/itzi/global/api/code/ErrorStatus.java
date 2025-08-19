@@ -14,6 +14,7 @@ public enum ErrorStatus implements BaseErrorCode {
     VALIDATION_ERROR(HttpStatus.BAD_REQUEST, "E-400-02", "요청 값이 올바르지 않습니다."),
     REQUIRED_FIELD_MISSING(HttpStatus.BAD_REQUEST, "E-400-03", "필수 입력 항목이 누락되었습니다."),
     DATE_RANGE_INVALID(HttpStatus.BAD_REQUEST, "E-400-04", "종료일은 시작일보다 빠를 수 없습니다."),
+    INVALID_TYPE(HttpStatus.BAD_REQUEST, "E-400-05", "잘못된 게시글 타입입니다."),
     NOT_FOUND(HttpStatus.NOT_FOUND, "E-404", "대상을 찾을 수 없습니다."),
     ALREADY_PUBLISHED(HttpStatus.CONFLICT, "E-409-01", "이미 게시된 글입니다."),
     CANNOT_DELETE_POST(HttpStatus.CONFLICT, "E-409-02", "해당 상태의 글은 삭제할 수 없습니다."),
