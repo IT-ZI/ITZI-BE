@@ -20,6 +20,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.springframework.util.StringUtils.hasText;
 
@@ -248,6 +249,18 @@ public class PromotionService {
         );
     }
 
+    // 내가 작성한 제휴 홍보 게시글 카드뷰 조회
+    @Transactional(readOnly = true)
+    public List<PromotionListResponse> getMyPromotionsList(Type type) {
+        Long FIXED_USER_ID = 1L;
+        List<Status> statuses = List.of(Status.DRAFT, Status.PUBLISHED);
+
+        return postRepository.findByUserIdAndTypeAndStatusIn(FIXED_USER_ID, type, statuses)
+                .stream()
+                .map(this::toListResponse)
+                .toList();
+    }
+
     private PromotionManualPublishResponse buildPublishResponse(Post saved) {
         return PromotionManualPublishResponse.builder()
                 .type(saved.getType())
@@ -390,6 +403,23 @@ public class PromotionService {
         } catch (IOException e) {
             throw new GeneralException(ErrorStatus.INTERNAL_ERROR, "이미지 업로드에 실패했습니다.");
         }
+    }
+
+    private PromotionListResponse toListResponse(Post post) {
+        return PromotionListResponse.builder()
+                .postId(post.getPostId())
+                .userId(post.getUserId())
+                .type(post.getType())
+                .status(post.getStatus())
+                .bookmarkCount(post.getBookmarkCount())
+                .exposureEndDate(post.getExposureEndDate())
+                .postImage(post.getPostImage())
+                .title(post.getTitle())
+                .target(post.getTarget())
+                .startDate(post.getStartDate())
+                .endDate(post.getEndDate())
+                .benefit(post.getBenefit())
+                .build();
     }
 
 }

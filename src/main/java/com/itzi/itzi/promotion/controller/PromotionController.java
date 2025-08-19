@@ -2,6 +2,7 @@ package com.itzi.itzi.promotion.controller;
 
 import com.itzi.itzi.global.api.code.SuccessStatus;
 import com.itzi.itzi.global.api.dto.ApiResponse;
+import com.itzi.itzi.posts.domain.Type;
 import com.itzi.itzi.promotion.dto.request.PromotionDraftSaveRequest;
 import com.itzi.itzi.promotion.dto.request.PromotionManualPublishRequest;
 import com.itzi.itzi.promotion.dto.response.*;
@@ -9,6 +10,8 @@ import com.itzi.itzi.promotion.service.PromotionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/promotion")
@@ -77,6 +80,14 @@ public class PromotionController {
         PromotionDeleteResponse response = promotionService.delete(postId);
         return ApiResponse.of(SuccessStatus._OK, response);
 
+    }
+
+    // 내가 작성한 제휴 홍보 게시글 목록 조회
+    @GetMapping("/mine")
+    public ApiResponse<List<PromotionListResponse>> getMyPromotionsList(@RequestParam Type type) {
+
+        List<PromotionListResponse> response = promotionService.getMyPromotionsList(type);
+        return ApiResponse.of(SuccessStatus._OK, response);
     }
 
 }
