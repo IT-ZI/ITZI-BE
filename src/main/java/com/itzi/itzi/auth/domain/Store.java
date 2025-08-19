@@ -2,9 +2,7 @@ package com.itzi.itzi.auth.domain;
 
 import jakarta.persistence.*;
 import lombok.*;
-import software.amazon.awssdk.services.s3.endpoints.internal.Value;
 
-import java.math.BigInteger;
 import java.util.HashSet;
 import java.util.Set;
 
