@@ -5,14 +5,12 @@ import com.itzi.itzi.global.api.dto.ApiResponse;
 import com.itzi.itzi.promotion.dto.request.PromotionDraftSaveRequest;
 import com.itzi.itzi.promotion.dto.request.PromotionManualPublishRequest;
 import com.itzi.itzi.promotion.dto.response.PromotionDraftSaveResponse;
+import com.itzi.itzi.promotion.dto.response.PromotionEditViewResponse;
 import com.itzi.itzi.promotion.dto.response.PromotionManualPublishResponse;
 import com.itzi.itzi.promotion.service.PromotionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/promotion")
@@ -44,4 +42,27 @@ public class PromotionController {
 
         return ApiResponse.of(SuccessStatus._OK, response);
     }
+
+    // 재수정 진입 (작성된 글 조회)
+    @GetMapping("/{postId}/edit")
+    public ApiResponse<PromotionEditViewResponse> getEditView(
+            @PathVariable Long postId) {
+        PromotionEditViewResponse response = promotionService.getEditView(postId);
+        return ApiResponse.of(SuccessStatus._OK, response);
+    }
+
+    // 재수정 후 즉시 게시
+    @PatchMapping("/{postId}/republish")
+    public ApiResponse<PromotionManualPublishResponse> republish(
+            @PathVariable Long postId,
+            @ModelAttribute PromotionManualPublishRequest request
+    ) {
+
+        Long fixedUserId = 1L;                 // 항상 1
+        PromotionManualPublishResponse response = promotionService.republish(fixedUserId, postId, request);
+
+        return ApiResponse.of(SuccessStatus._OK, response);
+
+    }
+
 }
