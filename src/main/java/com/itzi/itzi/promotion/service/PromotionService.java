@@ -9,10 +9,8 @@ import com.itzi.itzi.posts.domain.Type;
 import com.itzi.itzi.posts.repository.PostRepository;
 import com.itzi.itzi.promotion.dto.request.PromotionDraftSaveRequest;
 import com.itzi.itzi.promotion.dto.request.PromotionManualPublishRequest;
-import com.itzi.itzi.promotion.dto.response.PromotionDeleteResponse;
-import com.itzi.itzi.promotion.dto.response.PromotionDraftSaveResponse;
-import com.itzi.itzi.promotion.dto.response.PromotionEditViewResponse;
-import com.itzi.itzi.promotion.dto.response.PromotionManualPublishResponse;
+import com.itzi.itzi.promotion.dto.response.*;
+import com.itzi.itzi.recruitings.dto.response.RecruitingPublishResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -141,6 +139,37 @@ public class PromotionService {
         );
     }
 
+    // 제휴 게시글 업로드 (최초)
+    @Transactional
+    public PromotionPublishResponse publish(Long postId) {
+
+        // 존재하는 게시글인지 확인
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
+
+        // 이미 게시된 글인지 확인
+        if (post.getStatus() == Status.PUBLISHED) {
+            throw new GeneralException(ErrorStatus.ALREADY_PUBLISHED);
+        }
+
+        // 제휴 모집글 게시를 위해서는 모든 필드가 작성돼야 함
+        validateForPublishEntity(post);
+
+
+        // 게시 상태로 변경 및 생성 시간 업데이트
+        post.setStatus(Status.PUBLISHED);
+        post.setPublishedAt(LocalDateTime.now());
+
+        postRepository.save(post);
+
+        return new PromotionPublishResponse(
+                Type.RECRUITING,
+                post.getStatus(),
+                post.getPostId(),
+                post.getPublishedAt()
+        );
+    }
+
     // 재수정 진입 (작성된 값이 화면에 조회)
     @Transactional(readOnly = true)
     public PromotionEditViewResponse getEditView(Long postId) {
@@ -265,7 +294,7 @@ public class PromotionService {
         }
     }
 
-    // 필수값 검증 (재게시 용)
+    // 게시를 위한 필수값 검증 (모든 필드가 작성돼 있는지 확인)
     private void validateForPublishEntity(Post p) {
         if (!hasText(p.getTitle()) || !hasText(p.getTarget())
                 || !hasText(p.getBenefit()) || !hasText(p.getCondition())

@@ -4,10 +4,7 @@ import com.itzi.itzi.global.api.code.SuccessStatus;
 import com.itzi.itzi.global.api.dto.ApiResponse;
 import com.itzi.itzi.promotion.dto.request.PromotionDraftSaveRequest;
 import com.itzi.itzi.promotion.dto.request.PromotionManualPublishRequest;
-import com.itzi.itzi.promotion.dto.response.PromotionDeleteResponse;
-import com.itzi.itzi.promotion.dto.response.PromotionDraftSaveResponse;
-import com.itzi.itzi.promotion.dto.response.PromotionEditViewResponse;
-import com.itzi.itzi.promotion.dto.response.PromotionManualPublishResponse;
+import com.itzi.itzi.promotion.dto.response.*;
 import com.itzi.itzi.promotion.service.PromotionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +38,13 @@ public class PromotionController {
         Long fixedUserId = 1L;
         PromotionDraftSaveResponse response = promotionService.promotionDraft(fixedUserId, request);
 
+        return ApiResponse.of(SuccessStatus._OK, response);
+    }
+
+    // 제휴 게시글 업로드
+    @PatchMapping("{postId}/publish")
+    public ApiResponse<PromotionPublishResponse> publish(@PathVariable Long postId ) {
+        PromotionPublishResponse response = promotionService.publish(postId);
         return ApiResponse.of(SuccessStatus._OK, response);
     }
 
