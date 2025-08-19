@@ -90,4 +90,10 @@ public class PromotionController {
         return ApiResponse.of(SuccessStatus._OK, response);
     }
 
+    // 게시된 제휴 홍보글 단건 조회
+    @GetMapping("/{postId}")
+    public ApiResponse<PromotionDetailResponse> getPromotionDetail(@PathVariable Long postId) {
+        PromotionDetailResponse response = promotionService.getPromotionDetail(postId);
+        return ApiResponse.of(SuccessStatus._OK, response);
+    }
 }

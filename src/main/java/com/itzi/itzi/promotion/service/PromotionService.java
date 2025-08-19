@@ -261,6 +261,36 @@ public class PromotionService {
                 .toList();
     }
 
+    // 게시된 제휴 홍보글 단건 조회
+    @Transactional(readOnly = true)
+    public PromotionDetailResponse getPromotionDetail(Long postId) {
+
+        // 존재하는 게시글인지 확인
+        Post post = postRepository.findById(postId).orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
+
+        // type이 PROMOTION인지 검증
+        if (post.getType() != Type.PROMOTION) {
+            throw new GeneralException(ErrorStatus.INVALID_TYPE, "해당 게시글은 제휴 홍보글이 아닙니다.");
+        }
+
+        return PromotionDetailResponse.builder()
+                .userId(1L)                     // userId는 1로 고정
+                .postId(post.getPostId())
+                .type(post.getType())
+                .status(post.getStatus())
+                .exposureEndDate(post.getExposureEndDate())
+                .bookmarkCount(post.getBookmarkCount())
+                .postImage(post.getPostImage())
+                .title(post.getTitle())
+                .target(post.getTarget())
+                .startDate(post.getStartDate())
+                .endDate(post.getEndDate())
+                .benefit(post.getBenefit())
+                .condition(post.getCondition())
+                .content(post.getContent())
+                .build();
+    }
+
     private PromotionManualPublishResponse buildPublishResponse(Post saved) {
         return PromotionManualPublishResponse.builder()
                 .type(saved.getType())
