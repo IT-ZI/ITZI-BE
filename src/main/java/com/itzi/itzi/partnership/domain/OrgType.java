@@ -1,4 +1,4 @@
-package com.itzi.itzi.inquiry.domain;
+package com.itzi.itzi.partnership.domain;
 
 public enum OrgType {
     AUTO,

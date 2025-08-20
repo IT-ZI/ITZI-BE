@@ -1,4 +1,4 @@
-package com.itzi.itzi.inquiry.domain;
+package com.itzi.itzi.partnership.domain;
 
 import com.itzi.itzi.auth.domain.User;
 import com.itzi.itzi.store.domain.Store;
@@ -11,7 +11,7 @@ import lombok.*;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class Inquiries {
+public class Partnership {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
