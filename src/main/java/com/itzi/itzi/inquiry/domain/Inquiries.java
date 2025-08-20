@@ -11,7 +11,7 @@ import lombok.*;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class partnership {
+public class Inquiries {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
