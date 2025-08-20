@@ -1,6 +1,7 @@
 package com.itzi.itzi.store.domain;
 
 import com.itzi.itzi.auth.domain.Category;
+import com.itzi.itzi.auth.domain.User;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -59,10 +60,14 @@ public class Store {
        @CollectionTable : 부모 테이블의 PK를 FK로 가지는 연결 테이블 생성 */
     @ElementCollection
     @CollectionTable(
-            name = "store_keywords", // 별도 테이블 자동 생성
+            name = "store_keywords",
             joinColumns = @JoinColumn(name = "store_id")
     )
-    @Column(name = "keyword", length = 20, nullable = false)
-    // 키워드 중복 X, 순서 없이 저장
+    @Column(name = "keyword", length = 10, nullable = false) // DB는 여유 있게 50자로 둠
+    // 키워드 중복 X, 순서 X
     private Set<String> keywords = new HashSet<>();
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", unique = true)        // 사용자당 점포 1개
+    private User user;
 }

@@ -20,14 +20,14 @@ public class User {
     private Long userId;
 
     // 프로필 이름
-    @Column(name = "profile_name", nullable = false)
+    @Column(name = "profile_name", nullable = false, length = 10)
     private String profileName;
 
     // 사용자 본인 이름
-    @Column(name = "user_name", nullable = false)
+    @Column(name = "user_name", nullable = false, length = 10)
     private String userName;
 
-    @Column(nullable = false, length = 100)
+    @Column(nullable = false)
     private String password;
 
     @Column(nullable = false)
