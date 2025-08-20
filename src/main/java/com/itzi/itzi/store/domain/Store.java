@@ -1,5 +1,6 @@
-package com.itzi.itzi.auth.domain;
+package com.itzi.itzi.store.domain;
 
+import com.itzi.itzi.auth.domain.Category;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -30,7 +31,7 @@ public class Store {
     @Column(nullable = false)
     private String info;
 
-    // 업종
+    // 업종 (user 패키지 안에 존재)
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Category category;
