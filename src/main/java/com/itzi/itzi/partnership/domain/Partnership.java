@@ -5,11 +5,14 @@ import com.itzi.itzi.store.domain.Store;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.HashSet;
+import java.util.Set;
+
 @Entity
 @Getter
 @Setter
-@AllArgsConstructor
 @NoArgsConstructor
+@AllArgsConstructor
 @Builder
 public class Partnership {
 
@@ -18,23 +21,16 @@ public class Partnership {
     @Column(name = "partnership_id", nullable = false, unique = true)
     private Long partnershipId;
 
-    @Column(nullable = false)
     private String purpose;
 
-    @Builder.Default
     @Enumerated(EnumType.STRING)
-    @Column(name = "period_type", nullable = false, length = 120)
-    private PeriodType periodType = PeriodType.SAME_AS_POST;
+    private PeriodType periodType;
 
-    @Column(name = "period_value")
     private String periodValue;
 
-    @Builder.Default
     @Enumerated(EnumType.STRING)
-    @Column(name = "org_type", nullable = false)
-    private OrgType orgType = OrgType.AUTO;
+    private OrgType orgType;
 
-    @Column(name = "org_value")
     private String orgValue;
 
     @Column(nullable = false, columnDefinition = "TEXT")
@@ -44,28 +40,19 @@ public class Partnership {
     private String content;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private Status status = Status.DRAFT;
+    private Status status;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "sender_type", nullable=false)
-    private ActorType senderType;
+    @ElementCollection
+    @CollectionTable(name = "partnership_keywords", joinColumns = @JoinColumn(name = "partnership_id"))
+    private Set<String> keywords = new HashSet<>();
 
-    @Column(name = "sender_id", nullable=false)
-    private Long senderId;
+    // 보낸 사람
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sender_id", nullable = false)
+    private User sender;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "receiver_type", nullable=false)
-    private ActorType receiverType;
-
-    @Column(name = "receiver_id", nullable=false)
-    private Long receiverId;
-
-    @ManyToOne
-    @JoinColumn(name = "user_id", unique = true)
-    private User user;
-
-    @ManyToOne
-    @JoinColumn(name = "store_id", unique = true)
-    private Store store;
+    // 받는 사람
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "receiver_id", nullable = false)
+    private User receiver;
 }
