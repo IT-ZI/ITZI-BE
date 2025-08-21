@@ -521,9 +521,10 @@ public class RecruitService {
 
     // 내가 작성한 게시글 전체 리스트 조회 (userId = 1 고정)
     @Transactional(readOnly = true)
-    public List<RecruitingListResponse> getMyRecruitingList(Type type) {
+    public List<RecruitingListResponse> getMyRecruitingList() {
         Long FIXED_USER_ID = 1L;
         List<Status> statuses = List.of(Status.DRAFT, Status.PUBLISHED);
+        Type type = Type.RECRUITING;
 
         return postRepository.findByUser_UserIdAndTypeAndStatusIn(FIXED_USER_ID, type, statuses)
                 .stream()
@@ -533,8 +534,9 @@ public class RecruitService {
 
     // 모든 사용자가 작성한 제휴 모집글 조회
     @Transactional(readOnly = true)
-    public List<RecruitingListResponse> getAllRecruitingList(Type type, OrderBy orderBy, List<String> filters) {
+    public List<RecruitingListResponse> getAllRecruitingList(OrderBy orderBy, List<String> filters) {
         Status status = Status.PUBLISHED;           // 게시된 게시물만 조회
+        Type type = Type.RECRUITING;
 
         List<Post> posts = new ArrayList<>();
 

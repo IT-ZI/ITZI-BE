@@ -78,21 +78,18 @@ public class RecruitingController {
 
     // 내가 작성한 게시글 전체 조회 (userId = 1)
     @GetMapping("/mine")
-    public ApiResponse<List<RecruitingListResponse>> getMyRecruitingList(
-            @RequestParam Type type
-    ) {
-        List<RecruitingListResponse> response = recruitService.getMyRecruitingList(type);
+    public ApiResponse<List<RecruitingListResponse>> getMyRecruitingList() {
+        List<RecruitingListResponse> response = recruitService.getMyRecruitingList();
         return ApiResponse.of(SuccessStatus._OK, response);
     }
 
     // 모든 사용자가 작성한 제휴 모집글 조회
     @GetMapping("/all")
     public ApiResponse<List<RecruitingListResponse>> getAllRecruitingList(
-            @RequestParam(defaultValue = "RECRUITING") Type type,
             @RequestParam(defaultValue = "CLOSING") OrderBy orderBy,
             @RequestParam(required = false) List<String> filters
     ) {
-        List<RecruitingListResponse> responses = recruitService.getAllRecruitingList(type, orderBy, filters);
+        List<RecruitingListResponse> responses = recruitService.getAllRecruitingList(orderBy, filters);
         return ApiResponse.of(SuccessStatus._OK, responses);
     }
 }
