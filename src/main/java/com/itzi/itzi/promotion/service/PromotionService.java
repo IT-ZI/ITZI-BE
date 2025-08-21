@@ -1,5 +1,6 @@
 package com.itzi.itzi.promotion.service;
 
+import com.itzi.itzi.auth.domain.User;
 import com.itzi.itzi.global.api.code.ErrorStatus;
 import com.itzi.itzi.global.exception.GeneralException;
 import com.itzi.itzi.global.s3.S3Service;
@@ -47,7 +48,8 @@ public class PromotionService {
         Post post = Post.builder()
                 .type(Type.PROMOTION)
                 .status(Status.PUBLISHED)
-                .userId(userId)
+//                .userId(userId)
+                .user(User.builder().userId(userId).build())
                 .title(request.getTitle())
                 .target(request.getTarget())
                 .benefit(request.getBenefit())
@@ -118,7 +120,8 @@ public class PromotionService {
             // 새 제휴 게시글 생성
             post = Post.builder()
                     .status(Status.DRAFT)
-                    .userId(userId)
+//                    .userId(userId)
+                    .user(User.builder().userId(userId).build())
                     .type(Type.PROMOTION)
                     .build();
 
@@ -301,7 +304,7 @@ public class PromotionService {
         Long FIXED_USER_ID = 1L;
         List<Status> statuses = List.of(Status.DRAFT, Status.PUBLISHED);
 
-        return postRepository.findByUserIdAndTypeAndStatusIn(FIXED_USER_ID, type, statuses)
+        return postRepository.findByUser_UserIdAndTypeAndStatusIn(FIXED_USER_ID, type, statuses)
                 .stream()
                 .map(this::toListResponse)
                 .toList();
@@ -484,7 +487,8 @@ public class PromotionService {
     private PromotionListResponse toListResponse(Post post) {
         return PromotionListResponse.builder()
                 .postId(post.getPostId())
-                .userId(post.getUserId())
+//                .userId(post.getUserId())
+                .userId(post.getUser().getUserId())
                 .type(post.getType())
                 .status(post.getStatus())
                 .bookmarkCount(post.getBookmarkCount())
