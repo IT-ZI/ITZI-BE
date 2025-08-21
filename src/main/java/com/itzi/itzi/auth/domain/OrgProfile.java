@@ -50,6 +50,10 @@ public class OrgProfile {
     @Column(length = 100)
     private String intro;
 
+    // 별점
+    @Column
+    private Integer rating;
+
     // 키워드 (최대 5개까지 사용자가 입력)
     /* @ElementCollection : Enum 값을 별도 테이블에 저장
        @CollectionTable : 부모 테이블의 PK를 FK로 가지는 연결 테이블 생성 */

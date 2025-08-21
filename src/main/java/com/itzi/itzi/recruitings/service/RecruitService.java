@@ -2,6 +2,11 @@ package com.itzi.itzi.recruitings.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.itzi.itzi.auth.domain.OrgProfile;
+import com.itzi.itzi.auth.domain.OrgType;
+import com.itzi.itzi.auth.domain.User;
+import com.itzi.itzi.recruitings.dto.response.AuthorSummaryResponse;
+import com.itzi.itzi.auth.repository.UserRepository;
 import com.itzi.itzi.global.api.code.ErrorStatus;
 import com.itzi.itzi.global.exception.GeneralException;
 import com.itzi.itzi.global.s3.S3Service;
@@ -13,6 +18,7 @@ import com.itzi.itzi.posts.repository.PostRepository;
 import com.itzi.itzi.recruitings.dto.request.RecruitingAiGenerateRequest;
 import com.itzi.itzi.recruitings.dto.request.RecruitingDraftSaveRequest;
 import com.itzi.itzi.recruitings.dto.response.*;
+import com.itzi.itzi.store.domain.Store;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,6 +39,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -40,6 +47,7 @@ import java.util.regex.Pattern;
 public class RecruitService {
 
     private final PostRepository postRepository;
+    private final UserRepository userRepository;
     private final S3Service s3Service;
 
     @Value("${gemini.api.key}")
@@ -61,8 +69,13 @@ public class RecruitService {
         String endpoint = GEMINI_ENDPOINT + "?key=" + apiKey;
         String content = callGemini(endpoint, prompt);
 
+        // 2. Fetch the User entity using the userId
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("해당 사용자를 찾을 수 없습니다: " + userId));
+
         // 4. 이미지를 제외한 엔티티 구성
         Post entity = Post.builder()
+                        .user(user)
                         .type(Type.RECRUITING)
                         .title(request.getTitle().trim())
                         .target(request.getTarget().trim())
@@ -464,11 +477,27 @@ public class RecruitService {
     public RecruitingDetailResponse getRecruitingDetail(Long postId) {
 
         // 존재하는 게시글인지 확인
-        Post post = postRepository.findById(postId)
+        Post post = postRepository.findRecruitingDetailWithAuthor(postId, Type.RECRUITING)
                 .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
 
+        User author = post.getUser();
+
+        // 작성자 요약 블럭
+        OrgProfile org = author.getOrgProfile();
+        Store store = author.getStore();
+
+        // 작성자 타입에 따라 다른 요약 블럭을 생성
+        Object authorSummary;
+        if (org != null && org.getOrgType() == OrgType.STORE) {
+            // OrgType이 STORE일 경우, buildStoreSummary 메서드 사용
+            authorSummary = buildStoreSummary(store);
+        } else {
+            // 그 외의 경우, buildAuthorSummary 메서드 사용
+            authorSummary = buildAuthorSummary(author, org);
+        }
+
         return RecruitingDetailResponse.builder()
-                .userId(1L)                     // userId는 1로 고정
+                .userId(author.getUserId())
                 .postId(post.getPostId())
                 .type(post.getType())
                 .status(post.getStatus())
@@ -486,16 +515,18 @@ public class RecruitService {
                 .conditionNegotiable(post.isConditionNegotiable())
                 .postImageUrl(post.getPostImage())
                 .content(post.getContent())
+                .author(authorSummary)
                 .build();
     }
 
     // 내가 작성한 게시글 전체 리스트 조회 (userId = 1 고정)
     @Transactional(readOnly = true)
-    public List<RecruitingListResponse> getMyRecruitingList(Type type) {
+    public List<RecruitingListResponse> getMyRecruitingList() {
         Long FIXED_USER_ID = 1L;
         List<Status> statuses = List.of(Status.DRAFT, Status.PUBLISHED);
+        Type type = Type.RECRUITING;
 
-        return postRepository.findByUserIdAndTypeAndStatusIn(FIXED_USER_ID, type, statuses)
+        return postRepository.findByUser_UserIdAndTypeAndStatusIn(FIXED_USER_ID, type, statuses)
                 .stream()
                 .map(this::toListResponse)
                 .toList();
@@ -503,8 +534,9 @@ public class RecruitService {
 
     // 모든 사용자가 작성한 제휴 모집글 조회
     @Transactional(readOnly = true)
-    public List<RecruitingListResponse> getAllRecruitingList(Type type, OrderBy orderBy) {
+    public List<RecruitingListResponse> getAllRecruitingList(OrderBy orderBy, List<String> filters) {
         Status status = Status.PUBLISHED;           // 게시된 게시물만 조회
+        Type type = Type.RECRUITING;
 
         List<Post> posts = new ArrayList<>();
 
@@ -536,14 +568,20 @@ public class RecruitService {
                         type, status, Sort.by(Sort.Direction.ASC, "publishedAt"));
             }
         }
+
+        // 필터링 (기본값: 전체 조회)
+        if (filters != null && !filters.isEmpty()) {
+            posts = posts.stream()
+                    .filter(post -> filters.stream().anyMatch(filter -> post.getBenefit().contains(filter)))
+                    .collect(Collectors.toList());
+        }
         return posts.stream().map(this::toListResponse).toList();
     }
-
 
     private RecruitingListResponse toListResponse(Post post) {
         return RecruitingListResponse.builder()
                 .postId(post.getPostId())
-                .userId(post.getUserId())
+                .userId(post.getUser().getUserId())
                 .type(post.getType())
                 .status(post.getStatus())
                 .exposureEndDate(post.getExposureEndDate())
@@ -559,4 +597,39 @@ public class RecruitService {
                 .benefitNegotiable(post.isBenefitNegotiable())
                 .build();
     }
+
+    // 일반 작성자/조직의 요약 정보 생성
+    private AuthorSummaryResponse buildAuthorSummary(User author, OrgProfile org) {
+        return AuthorSummaryResponse.builder()
+                .image(author.getProfileImage())
+                .rating(author.getOrgProfile().getRating())
+                .name(author.getProfileName())
+                .info(org != null ? org.getIntro() : null)
+                .keywords(org != null ? org.getKeywords() : null)
+                .schoolName(org.getSchoolName())
+                .unitName(org.getUnitName())
+                .phone(org != null ? org.getPhone() : null)
+                .address(org != null ? org.getAddress() : null)
+                .ownerName(org != null ? org.getOwnerName() : null)
+                .linkUrl(org != null ? org.getLinkUrl() : null)
+                .build();
+    }
+
+    // 상점의 요약 정보 생성
+    private StoreSummaryResponse buildStoreSummary(Store store) {
+        return StoreSummaryResponse.builder()
+                .image(store.getStoreImage())
+                .rating(store.getRating())
+                .name(store.getName())
+                .info(store.getInfo())
+                .keywords(store.getKeywords())
+                .category(store.getCategory().name())
+                .operatingHours(store.getOperatingHours())
+                .phone(store.getPhone())
+                .address(store.getAddress())
+                .ownerName(store.getOwnerName())
+                .linkUrl(store.getLinkUrl())
+                .build();
+    }
+
 }
