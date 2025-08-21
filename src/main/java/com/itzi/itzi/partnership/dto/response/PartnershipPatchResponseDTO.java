@@ -10,18 +10,26 @@ import lombok.*;
 @Builder
 public class PartnershipPatchResponseDTO {
     private Long partnershipId;
+
     private Long senderId;
+    private String senderDisplayName;
     private Long receiverId;
+    private String receiverDisplayName;
+
     private String content;
-    private String status;
+    private String sendStatus;
+    private String acceptedStatus;
 
     public static PartnershipPatchResponseDTO fromEntity(Partnership p) {
         return PartnershipPatchResponseDTO.builder()
                 .partnershipId(p.getPartnershipId())
                 .senderId(p.getSender() != null ? p.getSender().getUserId() : null)
+                .senderDisplayName(PartnershipPostResponseDTO.resolveDisplayName(p.getSender()))
                 .receiverId(p.getReceiver() != null ? p.getReceiver().getUserId() : null)
+                .receiverDisplayName(PartnershipPostResponseDTO.resolveDisplayName(p.getReceiver()))
                 .content(p.getContent())
-                .status(p.getStatus() != null ? p.getStatus().name() : null)
+                .sendStatus(p.getSendStatus() != null ? p.getSendStatus().name() : null)
+                .acceptedStatus(p.getAcceptedStatus() != null ? p.getAcceptedStatus().name() : null)
                 .build();
     }
 }

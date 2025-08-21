@@ -6,8 +6,9 @@ import com.itzi.itzi.auth.domain.User;
 import com.itzi.itzi.auth.repository.UserRepository;
 import com.itzi.itzi.global.api.code.ErrorStatus;
 import com.itzi.itzi.global.exception.GeneralException;
+import com.itzi.itzi.partnership.domain.AcceptedStatus;
 import com.itzi.itzi.partnership.domain.Partnership;
-import com.itzi.itzi.partnership.domain.Status;
+import com.itzi.itzi.partnership.domain.SendStatus;
 import com.itzi.itzi.partnership.dto.request.PartnershipPatchRequestDTO;
 import com.itzi.itzi.partnership.dto.request.PartnershipPostRequestDTO;
 import com.itzi.itzi.partnership.dto.response.PartnershipPatchResponseDTO;
@@ -22,6 +23,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -73,8 +75,9 @@ public class PartnershipService {
                 .orgValue(dto.getOrgValue())
                 .detail(dto.getDetail())
                 .keywords(dto.getKeywords())
-                .content(aiContent)       // AI 변환 결과
-                .status(Status.DRAFT)     // 초안 상태
+                .content(aiContent)
+                .sendStatus(SendStatus.DRAFT)   // 초안
+                .acceptedStatus(AcceptedStatus.WAITING) // 대기
                 .build();
 
         Partnership saved = partnershipRepository.save(partnership);
@@ -90,17 +93,84 @@ public class PartnershipService {
         Partnership partnership = partnershipRepository.findById(partnershipId)
                 .orElseThrow(() -> new GeneralException(ErrorStatus.PARTNERSHIP_NOT_FOUND));
 
-        // ✅ 이미 전송된 경우 차단
-        if (partnership.getStatus() == Status.SEND) {
+        // 이미 전송된 경우 차단
+        if (partnership.getSendStatus() == SendStatus.SEND) {
             throw new GeneralException(ErrorStatus.ALREADY_SENT);
         }
 
+        // content 수정값 있으면 반영
+        if (dto != null && dto.getContent() != null && !dto.getContent().isBlank()) {
+            partnership.setContent(dto.getContent());
+        }
+
         // status 전환
-        partnership.setContent(dto.getContent());
-        partnership.setStatus(Status.SEND);
+        partnership.setSendStatus(SendStatus.SEND);
 
         Partnership updated = partnershipRepository.save(partnership);
         return PartnershipPatchResponseDTO.fromEntity(updated);
+    }
+
+
+    /**
+     * 3. 내가 보낸 문의 조회
+     */
+    public List<PartnershipPostResponseDTO> getSentInquiries(Long userId) {
+        List<Partnership> list = partnershipRepository.findBySenderUserId(userId);
+        return list.stream().map(PartnershipPostResponseDTO::fromEntity).toList();
+    }
+
+    /**
+     * 4. 내가 받은 문의 조회
+     */
+    public List<PartnershipPostResponseDTO> getReceivedInquiries(Long userId) {
+        List<Partnership> list = partnershipRepository.findByReceiverUserId(userId);
+        return list.stream().map(PartnershipPostResponseDTO::fromEntity).toList();
+    }
+
+    /**
+     * 5. 받은 문의 수락
+     */
+    public PartnershipPatchResponseDTO acceptInquiry(Long partnershipId) {
+        Partnership partnership = partnershipRepository.findById(partnershipId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.PARTNERSHIP_NOT_FOUND));
+
+        if (partnership.getSendStatus() != SendStatus.SEND) {
+            throw new GeneralException(ErrorStatus.INVALID_STATUS, "아직 전송되지 않은 문의입니다.");
+        }
+
+        partnership.setAcceptedStatus(AcceptedStatus.ACCEPTED);
+        Partnership updated = partnershipRepository.save(partnership);
+        return PartnershipPatchResponseDTO.fromEntity(updated);
+    }
+
+    /**
+     * 6. 받은 문의 거절
+     */
+    public PartnershipPatchResponseDTO declineInquiry(Long partnershipId) {
+        Partnership partnership = partnershipRepository.findById(partnershipId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.PARTNERSHIP_NOT_FOUND));
+
+        if (partnership.getSendStatus() != SendStatus.SEND) {
+            throw new GeneralException(ErrorStatus.INVALID_STATUS, "아직 전송되지 않은 문의입니다.");
+        }
+
+        partnership.setAcceptedStatus(AcceptedStatus.DECLINED);
+        Partnership updated = partnershipRepository.save(partnership);
+        return PartnershipPatchResponseDTO.fromEntity(updated);
+    }
+
+    /**
+     * 7. 거절된 보낸 문의 삭제
+     */
+    public void deleteDeclinedInquiry(Long partnershipId) {
+        Partnership partnership = partnershipRepository.findById(partnershipId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.PARTNERSHIP_NOT_FOUND));
+
+        if (partnership.getAcceptedStatus() != AcceptedStatus.DECLINED) {
+            throw new GeneralException(ErrorStatus.NOT_ALLOWED_DELETE);
+        }
+
+        partnershipRepository.delete(partnership);
     }
 
     /**
@@ -127,7 +197,7 @@ public class PartnershipService {
         """.formatted(
                 dto.getPurpose(),
                 dto.getPeriodValue(), dto.getPeriodType(),
-                dto.getOrgType(),
+                dto.getOrgValue(),
                 dto.getDetail(),
                 dto.getKeywords() != null ? String.join(", ", dto.getKeywords()) : ""
         );
