@@ -1,5 +1,6 @@
 package com.itzi.itzi.recruitings.dto.response;
 
+import com.itzi.itzi.auth.domain.Category;
 import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
 import lombok.AllArgsConstructor;
@@ -8,6 +9,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.util.Objects;
 
 @Getter
 @Builder
@@ -21,7 +23,8 @@ public class RecruitingDetailResponse {
     private LocalDate exposureEndDate;
     private Long bookmarkCount;
 
-    // 카테고리 추가 필요
+    // 카테고리
+    private Category category;          // FOOD, FASHION, BEAUTY, HEALTH, BOOK, LIVING, HOSPITAL, IT, TRANSPORTATION, ETC
 
     private Type type;                  // RECRUITING, PROMOTION
     private Status status;              // DRAFT, PUBLISHED
@@ -41,6 +44,7 @@ public class RecruitingDetailResponse {
 
     private String content;
 
-    // 작성자 정보 블럭 추가 필요
+    // 작성자 정보 블럭
+    private Object author;
 
 }
