@@ -1,6 +1,6 @@
 package com.itzi.itzi.partnership.domain;
 
-public enum Status {
+public enum SendStatus {
     DRAFT,
     SEND
 }
