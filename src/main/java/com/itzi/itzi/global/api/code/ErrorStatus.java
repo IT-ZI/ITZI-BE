@@ -19,12 +19,8 @@ public enum ErrorStatus implements BaseErrorCode {
     ALREADY_PUBLISHED(HttpStatus.CONFLICT, "E-409-01", "이미 게시된 글입니다."),
     CANNOT_DELETE_POST(HttpStatus.CONFLICT, "E-409-02", "해당 상태의 글은 삭제할 수 없습니다."),
     _INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "E-500-99", "내부 서버 오류"),
-    USER_NOT_FOUND(HttpStatus.NOT_FOUND, "E-404-01", "사용자를 찾을 수 없습니다."),
-    STORE_NOT_FOUND(HttpStatus.NOT_FOUND, "E-404-02", "스토어를 찾을 수 없습니다."),
-    INVALID_ENUM_VALUE(HttpStatus.BAD_REQUEST, "E-400-06", "열거형 값이 올바르지 않습니다."),
-    RATING_OUT_OF_RANGE(HttpStatus.BAD_REQUEST, "E-400-07", "평점 범위를 벗어났습니다."),
-    KEYWORDS_TOO_MANY(HttpStatus.BAD_REQUEST, "E-400-08", "키워드는 최대 5개까지 입력 가능합니다."),
-    KEYWORD_TOO_LONG(HttpStatus.BAD_REQUEST, "E-400-09", "키워드는 최대 20자까지 입력 가능합니다."),
+    PARTNERSHIP_NOT_FOUND(HttpStatus.NOT_FOUND, "E-404", "해당 제휴 요청을 찾을 수 없습니다."),
+    ALREADY_SENT(HttpStatus.CONFLICT, "E-409", "이미 제휴 요청이 전달되었습니다."),
 
 
     // Gemini
