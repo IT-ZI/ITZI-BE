@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -532,7 +533,7 @@ public class RecruitService {
 
     // 모든 사용자가 작성한 제휴 모집글 조회
     @Transactional(readOnly = true)
-    public List<RecruitingListResponse> getAllRecruitingList(Type type, OrderBy orderBy) {
+    public List<RecruitingListResponse> getAllRecruitingList(Type type, OrderBy orderBy, List<String> filters) {
         Status status = Status.PUBLISHED;           // 게시된 게시물만 조회
 
         List<Post> posts = new ArrayList<>();
@@ -565,9 +566,15 @@ public class RecruitService {
                         type, status, Sort.by(Sort.Direction.ASC, "publishedAt"));
             }
         }
+
+        // 필터링 (기본값: 전체 조회)
+        if (filters != null && !filters.isEmpty()) {
+            posts = posts.stream()
+                    .filter(post -> filters.stream().anyMatch(filter -> post.getBenefit().contains(filter)))
+                    .collect(Collectors.toList());
+        }
         return posts.stream().map(this::toListResponse).toList();
     }
-
 
     private RecruitingListResponse toListResponse(Post post) {
         return RecruitingListResponse.builder()
