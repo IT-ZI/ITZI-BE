@@ -4,7 +4,11 @@ import com.itzi.itzi.auth.domain.Category;
 import lombok.*;
 import java.util.Set;
 
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class StoreRequestDTO {
     // Store
     private String storeImage;
