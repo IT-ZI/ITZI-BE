@@ -65,6 +65,7 @@ public class Store {
     )
     @Column(name = "keyword", length = 10, nullable = false) // DB는 여유 있게 50자로 둠
     // 키워드 중복 X, 순서 X
+    @Builder.Default
     private Set<String> keywords = new HashSet<>();
 
     @OneToOne(fetch = FetchType.LAZY)

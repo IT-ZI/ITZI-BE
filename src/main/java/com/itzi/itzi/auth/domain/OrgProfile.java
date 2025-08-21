@@ -64,6 +64,7 @@ public class OrgProfile {
     )
     @Column(name = "keyword", length = 10, nullable = false)
     // 키워드 중복 X, 순서 없이 저장
+    @Builder.Default
     private Set<String> keywords = new HashSet<>();
 
 }
