@@ -1,5 +1,6 @@
 package com.itzi.itzi.auth.domain;
 
+import com.itzi.itzi.store.domain.Store;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -49,4 +50,11 @@ public class User {
     @CreationTimestamp
     @Column(name = "created_at",nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    // 단건 조회를 위해 역방향 연관 필드 추가
+    @OneToOne(mappedBy = "user", fetch = FetchType.LAZY)
+    private OrgProfile orgProfile;
+
+    @OneToOne(mappedBy = "user", fetch = FetchType.LAZY)
+    private Store store;
 }
