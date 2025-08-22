@@ -1,5 +1,7 @@
 package com.itzi.itzi.promotion.service;
 
+import com.itzi.itzi.agreement.domain.Docs;
+import com.itzi.itzi.agreement.repository.DocsRepository;
 import com.itzi.itzi.auth.domain.User;
 import com.itzi.itzi.global.api.code.ErrorStatus;
 import com.itzi.itzi.global.exception.GeneralException;
@@ -34,12 +36,25 @@ public class PromotionService {
 
     private final PostRepository postRepository;
     private final S3Service s3Service;
+    private final DocsRepository docsRepository;
 
     // 제휴 게시글 수동 작성 후 업로드
     @Transactional
-    public PromotionManualPublishResponse promotionManualPublish(Long userId, PromotionManualPublishRequest request) {
+    public PromotionManualPublishResponse promotionManualPublish(Long docsId, PromotionManualPublishRequest request) {
 
         // 0. 제휴 게시글을 맺을 수 있는 상태인지 검증 추가 필요
+        Docs docs = docsRepository.findById(docsId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.PARTNERSHIP_NOT_FOUND));
+
+        // docs 협의 상태가 완료인 경우에만 제휴 홍보글 작성 가능
+        if (docs.getStatus() != com.itzi.itzi.agreement.domain.Status.APPROVED) {
+            throw new GeneralException(ErrorStatus.INVALID_STATUS);
+        }
+
+        // Docs에 연결된 Post가 이미 있는지 확인
+        if (docs.getPost() != null) {
+            throw new GeneralException(ErrorStatus.POST_ALREADY_EXISTS);
+        }
 
         // 1. 필수 값 검증
         validateForPublish(request);
@@ -48,8 +63,8 @@ public class PromotionService {
         Post post = Post.builder()
                 .type(Type.PROMOTION)
                 .status(Status.PUBLISHED)
-//                .userId(userId)
-                .user(User.builder().userId(userId).build())
+                .sender(docs.getSender())
+                .receiver(docs.getReceiver())
                 .title(request.getTitle())
                 .target(request.getTarget())
                 .benefit(request.getBenefit())
@@ -60,6 +75,7 @@ public class PromotionService {
                 .exposureEndDate(request.getExposureEndDate())
                 .exposeProposerInfo(Boolean.TRUE.equals(request.getExposeProposerInfo()))
                 .exposeTargetInfo(Boolean.TRUE.equals(request.getExposeTargetInfo()))
+                .docs(docs)
                 .publishedAt(LocalDateTime.now())
                 .build();
 
@@ -68,11 +84,17 @@ public class PromotionService {
 
         postRepository.save(post);
 
+        // partnership 엔티티에 Post 정보 업데이트 (양방향 관계)
+        docs.setPost(post);
+        docsRepository.save(docs);
+
         // 4. 응답 반환
         return PromotionManualPublishResponse.builder()
                 .type(post.getType())
                 .status(post.getStatus())
                 .postId(post.getPostId())
+                .senderName(docs.getSenderName())
+                .receiverName(docs.getReceiverName())
                 .postImage(post.getPostImage())
                 .title(post.getTitle())
                 .target(post.getTarget())

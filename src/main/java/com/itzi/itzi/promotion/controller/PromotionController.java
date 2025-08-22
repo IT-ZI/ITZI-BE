@@ -25,11 +25,11 @@ public class PromotionController {
     // 제휴 게시글 수동 작성 후 업로드
     @PostMapping
     public ApiResponse<PromotionManualPublishResponse> promotionManualPublish(
+            @RequestParam(name = "docsId") Long docsId,
             @ModelAttribute PromotionManualPublishRequest request
     ){
 
-        Long fixedUserId = 1L;                 // 항상 1
-        PromotionManualPublishResponse response = promotionService.promotionManualPublish(fixedUserId, request);
+        PromotionManualPublishResponse response = promotionService.promotionManualPublish(docsId, request);
 
         return ApiResponse.of(SuccessStatus._OK, response);
     }
