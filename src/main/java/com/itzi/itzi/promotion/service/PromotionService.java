@@ -1,5 +1,7 @@
 package com.itzi.itzi.promotion.service;
 
+import com.itzi.itzi.agreement.domain.Agreement;
+import com.itzi.itzi.agreement.repository.AgreementRepository;
 import com.itzi.itzi.auth.domain.User;
 import com.itzi.itzi.global.api.code.ErrorStatus;
 import com.itzi.itzi.global.exception.GeneralException;
@@ -24,6 +26,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.springframework.util.StringUtils.hasText;
 
@@ -34,12 +37,36 @@ public class PromotionService {
 
     private final PostRepository postRepository;
     private final S3Service s3Service;
+    private final AgreementRepository agreementRepository;
+
+    // 제휴 홍보 게시글을 맺을 수 있는 제휴 대상자 리스트 조회
+    @Transactional(readOnly = true)
+    public List<String> getAvailableAgreement() {
+        List<Agreement> agreementList = agreementRepository.findByStatusAndPostIsNull(com.itzi.itzi.agreement.domain.Status.APPROVED);
+
+        return agreementList.stream()
+                .map(Agreement::getReceiverName) // Agreement 객체에서 receiverName만 추출
+                .distinct() // 중복 제거
+                .collect(Collectors.toList());
+    }
 
     // 제휴 게시글 수동 작성 후 업로드
     @Transactional
-    public PromotionManualPublishResponse promotionManualPublish(Long userId, PromotionManualPublishRequest request) {
+    public PromotionManualPublishResponse promotionManualPublish(Long agreementId, PromotionManualPublishRequest request) {
 
         // 0. 제휴 게시글을 맺을 수 있는 상태인지 검증 추가 필요
+        Agreement agreement = agreementRepository.findById(agreementId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.PARTNERSHIP_NOT_FOUND));
+
+        // agreement 협의 상태가 완료인 경우에만 제휴 홍보글 작성 가능
+        if (agreement.getStatus() != com.itzi.itzi.agreement.domain.Status.APPROVED) {
+            throw new GeneralException(ErrorStatus.INVALID_STATUS);
+        }
+
+        // Agreement에 연결된 Post가 이미 있는지 확인
+        if (agreement.getPost() != null) {
+            throw new GeneralException(ErrorStatus.POST_ALREADY_EXISTS);
+        }
 
         // 1. 필수 값 검증
         validateForPublish(request);
@@ -48,8 +75,8 @@ public class PromotionService {
         Post post = Post.builder()
                 .type(Type.PROMOTION)
                 .status(Status.PUBLISHED)
-//                .userId(userId)
-                .user(User.builder().userId(userId).build())
+                .sender(agreement.getSender())
+                .receiver(agreement.getReceiver())
                 .title(request.getTitle())
                 .target(request.getTarget())
                 .benefit(request.getBenefit())
@@ -60,6 +87,7 @@ public class PromotionService {
                 .exposureEndDate(request.getExposureEndDate())
                 .exposeProposerInfo(Boolean.TRUE.equals(request.getExposeProposerInfo()))
                 .exposeTargetInfo(Boolean.TRUE.equals(request.getExposeTargetInfo()))
+                .agreement(agreement)
                 .publishedAt(LocalDateTime.now())
                 .build();
 
@@ -68,11 +96,17 @@ public class PromotionService {
 
         postRepository.save(post);
 
+        // agreement 엔티티에 Post 정보 업데이트 (양방향 관계)
+        agreement.setPost(post);
+        agreementRepository.save(agreement);
+
         // 4. 응답 반환
         return PromotionManualPublishResponse.builder()
                 .type(post.getType())
                 .status(post.getStatus())
                 .postId(post.getPostId())
+                .senderName(agreement.getSenderName())
+                .receiverName(agreement.getReceiverName())
                 .postImage(post.getPostImage())
                 .title(post.getTitle())
                 .target(post.getTarget())

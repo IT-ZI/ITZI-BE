@@ -1,5 +1,6 @@
 package com.itzi.itzi.posts.domain;
 
+import com.itzi.itzi.agreement.domain.Agreement;
 import com.itzi.itzi.auth.domain.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -91,5 +92,17 @@ public class Post {
     // 제휴 제안자, 대상자
     private Boolean exposeProposerInfo;
     private Boolean exposeTargetInfo;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "agreement_id")
+    private Agreement agreement;
+
+    @ManyToOne
+    @JoinColumn(name = "sender_id")
+    private User sender;
+
+    @ManyToOne
+    @JoinColumn(name = "receiver_id")
+    private User receiver;
 
 }

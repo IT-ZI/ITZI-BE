@@ -24,6 +24,7 @@ public enum ErrorStatus implements BaseErrorCode {
     ALREADY_SENT(HttpStatus.CONFLICT, "E-409-03", "이미 제휴 요청이 전달되었습니다."),
     INVALID_STATUS(HttpStatus.CONFLICT, "E-409-04", "현재 상태에서는 수행할 수 없는 요청입니다."),
     NOT_ALLOWED_DELETE(HttpStatus.CONFLICT, "E-409-05", "삭제할 수 없는 상태의 제휴 요청입니다."),
+    POST_ALREADY_EXISTS(HttpStatus.CONFLICT, "E-409-06", "이미 제휴 홍보 게시글이 작성되었습니다."),
 
     _INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "E-500-99", "내부 서버 오류"),
 
@@ -57,4 +58,6 @@ public enum ErrorStatus implements BaseErrorCode {
                 .httpStatus(httpStatus)
                 .build();
     }
+
+
 }
