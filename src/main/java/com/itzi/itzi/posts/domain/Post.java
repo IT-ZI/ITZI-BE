@@ -1,6 +1,6 @@
 package com.itzi.itzi.posts.domain;
 
-import com.itzi.itzi.agreement.domain.Docs;
+import com.itzi.itzi.agreement.domain.Agreement;
 import com.itzi.itzi.auth.domain.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -94,8 +94,8 @@ public class Post {
     private Boolean exposeTargetInfo;
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "docs_id")
-    private Docs docs;
+    @JoinColumn(name = "agreement_id")
+    private Agreement agreement;
 
     @ManyToOne
     @JoinColumn(name = "sender_id")
