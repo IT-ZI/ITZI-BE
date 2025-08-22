@@ -68,6 +68,10 @@ public class PromotionService {
             throw new GeneralException(ErrorStatus.POST_ALREADY_EXISTS);
         }
 
+        if (agreement.getSender() == null) {
+            throw new GeneralException(ErrorStatus.NOT_FOUND, "작성자 정보가 누락되었습니다.");
+        }
+
         // 1. 필수 값 검증
         validateForPublish(request);
 
@@ -75,6 +79,7 @@ public class PromotionService {
         Post post = Post.builder()
                 .type(Type.PROMOTION)
                 .status(Status.PUBLISHED)
+                .user(agreement.getSender())
                 .sender(agreement.getSender())
                 .receiver(agreement.getReceiver())
                 .title(request.getTitle())
