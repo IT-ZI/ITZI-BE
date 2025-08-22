@@ -19,6 +19,9 @@ public class PromotionManualPublishResponse {
     private Status status;
     private Long postId;
 
+    private String senderName;
+    private String receiverName;
+
     private String postImage;
     private String title;
     private String target;
