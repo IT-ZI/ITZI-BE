@@ -26,6 +26,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.springframework.util.StringUtils.hasText;
 
@@ -37,6 +38,17 @@ public class PromotionService {
     private final PostRepository postRepository;
     private final S3Service s3Service;
     private final DocsRepository docsRepository;
+
+    // 제휴 홍보 게시글을 맺을 수 있는 제휴 대상자 리스트 조회
+    @Transactional(readOnly = true)
+    public List<String> getAvailableDocs() {
+        List<Docs> docsList = docsRepository.findByStatusAndPostIsNull(com.itzi.itzi.agreement.domain.Status.APPROVED);
+
+        return docsList.stream()
+                .map(Docs::getReceiverName) // Docs 객체에서 receiverName만 추출
+                .distinct() // 중복 제거
+                .collect(Collectors.toList());
+    }
 
     // 제휴 게시글 수동 작성 후 업로드
     @Transactional

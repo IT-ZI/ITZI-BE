@@ -1,5 +1,6 @@
 package com.itzi.itzi.promotion.controller;
 
+import com.itzi.itzi.agreement.domain.Docs;
 import com.itzi.itzi.global.api.code.SuccessStatus;
 import com.itzi.itzi.global.api.dto.ApiResponse;
 import com.itzi.itzi.posts.domain.OrderBy;
@@ -21,6 +22,13 @@ import java.util.List;
 public class PromotionController {
 
     private final PromotionService promotionService;
+
+    // 제휴 홍보 게시글을 맺을 수 있는 제휴 대상자 리스트 조회
+    @GetMapping("/available")
+    public ApiResponse<List<String>> getAvailableDocs() {
+        List<String> receiverNames  = promotionService.getAvailableDocs();
+        return ApiResponse.of(SuccessStatus._OK, receiverNames);
+    }
 
     // 제휴 게시글 수동 작성 후 업로드
     @PostMapping
