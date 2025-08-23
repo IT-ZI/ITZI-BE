@@ -4,6 +4,7 @@ import com.itzi.itzi.global.api.code.SuccessStatus;
 import com.itzi.itzi.global.api.dto.ApiResponse;
 import com.itzi.itzi.posts.domain.Type;
 import com.itzi.itzi.posts.dto.request.PostDraftSaveRequest;
+import com.itzi.itzi.posts.dto.response.PostDeleteResponse;
 import com.itzi.itzi.posts.dto.response.PostDraftSaveResponse;
 import com.itzi.itzi.posts.dto.response.PostPublishResponse;
 import com.itzi.itzi.promotion.dto.request.BenefitGenerateAiRequest;
@@ -52,6 +53,13 @@ public class BenefitController {
     public ApiResponse<PostPublishResponse> publishBenefit(@PathVariable Long postId) {
         PostPublishResponse response = benefitService.publishBenefit(postId);
 
+        return ApiResponse.of(SuccessStatus._OK, response);
+    }
+
+    // 삭제하기
+    @DeleteMapping("/{postId}")
+    public ApiResponse<PostDeleteResponse> deleteBenefit(@PathVariable Long postId) {
+        PostDeleteResponse response = benefitService.deleteBenefit(postId);
         return ApiResponse.of(SuccessStatus._OK, response);
     }
 

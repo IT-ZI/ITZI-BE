@@ -10,6 +10,7 @@ import com.itzi.itzi.posts.domain.Post;
 import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
 import com.itzi.itzi.posts.dto.request.PostDraftSaveRequest;
+import com.itzi.itzi.posts.dto.response.PostDeleteResponse;
 import com.itzi.itzi.posts.dto.response.PostDraftSaveResponse;
 import com.itzi.itzi.posts.dto.response.PostPublishResponse;
 import com.itzi.itzi.posts.repository.PostRepository;
@@ -116,6 +117,22 @@ public class BenefitService {
         }
 
         return postService.pusblishPost(postId);
+    }
+
+    // 제휴 홍보 게시글 삭제하기
+    @Transactional
+    public PostDeleteResponse deleteBenefit(Long postId) {
+
+        // 1. 게시글 존재 여부 확인
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
+
+        // 2. 게시글 타입 검증 : BENEFIT 타입만 삭제 가능
+        if (post.getType() != Type.BENEFIT) {
+            throw new GeneralException(ErrorStatus.INVALID_TYPE, "BENEFIT 타입의 게시물만 삭제할 수 있습니다.");
+        }
+
+        return postService.deletePost(postId);
     }
 
     private void validate(BenefitGenerateAiRequest request) {
