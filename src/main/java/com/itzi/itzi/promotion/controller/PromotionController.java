@@ -1,5 +1,6 @@
 package com.itzi.itzi.promotion.controller;
 
+import com.itzi.itzi.auth.domain.Category;
 import com.itzi.itzi.global.api.code.SuccessStatus;
 import com.itzi.itzi.global.api.dto.ApiResponse;
 import com.itzi.itzi.posts.domain.OrderBy;
@@ -95,7 +96,7 @@ public class PromotionController {
     @GetMapping("/all")
     public ApiResponse<List<PostListResponse>> getAllPromotionList(
             @RequestParam(defaultValue = "CLOSING") OrderBy orderBy,
-            @RequestParam(required = false) List<String> filters
+            @RequestParam(required = false) List<Category> filters
     ) {
         List<PostListResponse> response = promotionService.getAllPromotionList(orderBy, filters);
         return ApiResponse.of(SuccessStatus._OK, response);
