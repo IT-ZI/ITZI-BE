@@ -2,6 +2,7 @@ package com.itzi.itzi.promotion.service;
 
 import com.itzi.itzi.agreement.domain.Agreement;
 import com.itzi.itzi.agreement.repository.AgreementRepository;
+import com.itzi.itzi.auth.domain.Category;
 import com.itzi.itzi.auth.domain.User;
 import com.itzi.itzi.global.api.code.ErrorStatus;
 import com.itzi.itzi.global.exception.GeneralException;
@@ -26,6 +27,7 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static org.springframework.util.StringUtils.hasText;
@@ -296,12 +298,16 @@ public class PromotionService {
 
     // 모든 사용자가 작성한 제휴 홍보 게시글 카드뷰 조회
     @Transactional(readOnly = true)
-    public List<PostListResponse> getAllPromotionList(OrderBy orderBy, List<String> filters) {
+    public List<PostListResponse> getAllPromotionList(OrderBy orderBy, List<Category> categories) {
 
         Status status = Status.PUBLISHED;
         List<Type> types = List.of(Type.BENEFIT, Type.PROMOTION);
 
-        return postService.getAllPostList(types, status, orderBy, filters); // filters가 필요 없으므로 null 전달
+        Predicate<Post> categoryFilter = (categories == null || categories.isEmpty())
+                ? null
+                : post -> post.getCategory() != null && categories.contains(post.getCategory());
+
+        return postService.getAllPostList(types, status, orderBy, categoryFilter);
 
     }
 

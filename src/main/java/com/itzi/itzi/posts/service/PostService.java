@@ -17,6 +17,7 @@ import com.itzi.itzi.posts.dto.request.PostDraftSaveRequest;
 import com.itzi.itzi.recruitings.dto.response.AuthorSummaryResponse;
 import com.itzi.itzi.recruitings.dto.response.StoreSummaryResponse;
 import com.itzi.itzi.store.domain.Store;
+import jakarta.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Sort;
@@ -29,6 +30,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 @Service
@@ -198,7 +200,7 @@ public class PostService {
 
     // 공통: 모든 사용자가 작성한 게시글 조회
     @Transactional(readOnly = true)
-    public List<PostListResponse> getAllPostList(List<Type> types, Status status, OrderBy orderBy, List<String> filters) {
+    public List<PostListResponse> getAllPostList(List<Type> types, Status status, OrderBy orderBy, @Nullable Predicate<Post> filter) {
 
         List<Post> posts = new ArrayList<>();
 
@@ -232,11 +234,10 @@ public class PostService {
         }
 
         // 필터링 (기본값: 전체 조회)
-        if (filters != null && !filters.isEmpty()) {
-            posts = posts.stream()
-                    .filter(post -> filters.stream().anyMatch(filter -> post.getBenefit().contains(filter)))
-                    .collect(Collectors.toList());
+        if (filter != null) {
+            posts = posts.stream().filter(filter).toList();
         }
+
         return posts.stream().map(this::toListResponse).toList();
     }
 
