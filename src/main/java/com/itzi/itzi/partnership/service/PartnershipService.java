@@ -14,6 +14,8 @@ import com.itzi.itzi.partnership.dto.request.PartnershipPostRequestDTO;
 import com.itzi.itzi.partnership.dto.response.PartnershipPatchResponseDTO;
 import com.itzi.itzi.partnership.dto.response.PartnershipPostResponseDTO;
 import com.itzi.itzi.partnership.repository.PartnershipRepository;
+import com.itzi.itzi.posts.domain.Post;
+import com.itzi.itzi.posts.repository.PostRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,6 +34,7 @@ public class PartnershipService {
 
     private final UserRepository userRepository;
     private final PartnershipRepository partnershipRepository;
+    private final PostRepository postRepository;   // ✅ 모집글 조회를 위해 필요
 
     @Value("${gemini.api.key}")
     private String apiKey;
@@ -47,11 +50,13 @@ public class PartnershipService {
     ) {
         User sender = userRepository.findById(userId)
                 .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
-
         User receiver = userRepository.findById(receiverId)
                 .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
 
-        // ✅ 이미 존재하는 DRAFT 또는 SEND 확인
+        Post post = postRepository.findById(dto.getPostId()) // ✅ 필수
+                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND, "모집글을 찾을 수 없습니다."));
+
+        // ✅ 이미 같은 sender/receiver/post 조합으로 존재하는지 체크
         boolean exists = partnershipRepository.existsBySenderAndReceiver(sender, receiver);
         if (exists) {
             throw new GeneralException(ErrorStatus.ALREADY_SENT);
@@ -68,6 +73,7 @@ public class PartnershipService {
         Partnership partnership = Partnership.builder()
                 .sender(sender)
                 .receiver(receiver)
+                .post(post)  // ✅ 반드시 연결
                 .purpose(dto.getPurpose())
                 .periodType(dto.getPeriodType())
                 .periodValue(dto.getPeriodValue())
@@ -76,7 +82,7 @@ public class PartnershipService {
                 .detail(dto.getDetail())
                 .keywords(dto.getKeywords())
                 .content(aiContent)
-                .sendStatus(SendStatus.DRAFT)   // 초안
+                .sendStatus(SendStatus.DRAFT)        // 초안
                 .acceptedStatus(AcceptedStatus.WAITING) // 대기
                 .build();
 
@@ -109,7 +115,6 @@ public class PartnershipService {
         Partnership updated = partnershipRepository.save(partnership);
         return PartnershipPatchResponseDTO.fromEntity(updated);
     }
-
 
     /**
      * 3. 내가 보낸 문의 조회
