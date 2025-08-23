@@ -4,9 +4,7 @@ import com.itzi.itzi.global.api.code.SuccessStatus;
 import com.itzi.itzi.global.api.dto.ApiResponse;
 import com.itzi.itzi.posts.domain.OrderBy;
 import com.itzi.itzi.posts.domain.Type;
-import com.itzi.itzi.posts.dto.response.PostDeleteResponse;
-import com.itzi.itzi.posts.dto.response.PostPublishResponse;
-import com.itzi.itzi.posts.dto.response.PostDraftSaveResponse;
+import com.itzi.itzi.posts.dto.response.*;
 import com.itzi.itzi.recruitings.dto.request.RecruitingAiGenerateRequest;
 import com.itzi.itzi.posts.dto.request.PostDraftSaveRequest;
 import com.itzi.itzi.recruitings.dto.response.*;
@@ -73,26 +71,26 @@ public class RecruitingController {
 
     // 작성한 게시글 단건 상세 내용 조회
     @GetMapping("/{postId}")
-    public ApiResponse<RecruitingDetailResponse> getRecruitingDetail(@PathVariable Long postId) {
+    public ApiResponse<PostDetailResponse> getRecruitingDetail(@PathVariable Long postId) {
 
-        RecruitingDetailResponse response = recruitService.getRecruitingDetail(postId);
+        PostDetailResponse response = recruitService.getRecruitingDetail(postId);
         return ApiResponse.of(SuccessStatus._OK, response);
     }
 
     // 내가 작성한 게시글 전체 조회 (userId = 1)
     @GetMapping("/mine")
-    public ApiResponse<List<RecruitingListResponse>> getMyRecruitingList() {
-        List<RecruitingListResponse> response = recruitService.getMyRecruitingList();
+    public ApiResponse<List<PostListResponse>> getMyRecruitingList() {
+        List<PostListResponse> response = recruitService.getMyRecruitingList();
         return ApiResponse.of(SuccessStatus._OK, response);
     }
 
     // 모든 사용자가 작성한 제휴 모집글 조회
     @GetMapping("/all")
-    public ApiResponse<List<RecruitingListResponse>> getAllRecruitingList(
+    public ApiResponse<List<PostListResponse>> getAllRecruitingList(
             @RequestParam(defaultValue = "CLOSING") OrderBy orderBy,
             @RequestParam(required = false) List<String> filters
     ) {
-        List<RecruitingListResponse> responses = recruitService.getAllRecruitingList(orderBy, filters);
+        List<PostListResponse> responses = recruitService.getAllRecruitingList(orderBy, filters);
         return ApiResponse.of(SuccessStatus._OK, responses);
     }
 }

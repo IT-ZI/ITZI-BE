@@ -4,9 +4,7 @@ import com.itzi.itzi.auth.domain.OrgProfile;
 import com.itzi.itzi.auth.domain.OrgType;
 import com.itzi.itzi.auth.domain.User;
 import com.itzi.itzi.global.gemini.GeminiService;
-import com.itzi.itzi.posts.dto.response.PostDeleteResponse;
-import com.itzi.itzi.posts.dto.response.PostPublishResponse;
-import com.itzi.itzi.posts.dto.response.PostDraftSaveResponse;
+import com.itzi.itzi.posts.dto.response.*;
 import com.itzi.itzi.posts.service.PostService;
 import com.itzi.itzi.recruitings.dto.response.AuthorSummaryResponse;
 import com.itzi.itzi.auth.repository.UserRepository;
@@ -281,162 +279,25 @@ public class RecruitService {
 
     // 작성한 게시글 단건 상세 내용 조회
     @Transactional(readOnly = true)
-    public RecruitingDetailResponse getRecruitingDetail(Long postId) {
-
-        // 존재하는 게시글인지 확인
-        Post post = postRepository.findRecruitingDetailWithAuthor(postId, Type.RECRUITING)
-                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
-
-        User author = post.getUser();
-
-        // 작성자 요약 블럭
-        OrgProfile org = author.getOrgProfile();
-        Store store = author.getStore();
-
-        // 작성자 타입에 따라 다른 요약 블럭을 생성
-        Object authorSummary;
-        if (org != null && org.getOrgType() == OrgType.STORE) {
-            // OrgType이 STORE일 경우, buildStoreSummary 메서드 사용
-            authorSummary = buildStoreSummary(store);
-        } else {
-            // 그 외의 경우, buildAuthorSummary 메서드 사용
-            authorSummary = buildAuthorSummary(author, org);
-        }
-
-        return RecruitingDetailResponse.builder()
-                .userId(author.getUserId())
-                .postId(post.getPostId())
-                .type(post.getType())
-                .status(post.getStatus())
-                .exposureEndDate(post.getExposureEndDate())
-                .bookmarkCount(post.getBookmarkCount())
-                .title(post.getTitle())
-                .target(post.getTarget())
-                .targetNegotiable(post.isTargetNegotiable())
-                .startDate(post.getStartDate())
-                .endDate(post.getEndDate())
-                .periodNegotiable(post.isPeriodNegotiable())
-                .benefit(post.getBenefit())
-                .benefitNegotiable(post.isBenefitNegotiable())
-                .condition(post.getCondition())
-                .conditionNegotiable(post.isConditionNegotiable())
-                .postImageUrl(post.getPostImage())
-                .content(post.getContent())
-                .author(authorSummary)
-                .build();
+    public PostDetailResponse getRecruitingDetail(Long postId) {
+        return postService.getPostDetail(postId, Type.RECRUITING);
     }
 
     // 내가 작성한 게시글 전체 리스트 조회 (userId = 1 고정)
     @Transactional(readOnly = true)
-    public List<RecruitingListResponse> getMyRecruitingList() {
+    public List<PostListResponse> getMyRecruitingList() {
         Long FIXED_USER_ID = 1L;
         List<Status> statuses = List.of(Status.DRAFT, Status.PUBLISHED);
-        Type type = Type.RECRUITING;
 
-        return postRepository.findByUser_UserIdAndTypeAndStatusIn(FIXED_USER_ID, type, statuses)
-                .stream()
-                .map(this::toListResponse)
-                .toList();
+        return postService.getMyPostList(FIXED_USER_ID, statuses, Type.RECRUITING);
+
     }
 
     // 모든 사용자가 작성한 제휴 모집글 조회
     @Transactional(readOnly = true)
-    public List<RecruitingListResponse> getAllRecruitingList(OrderBy orderBy, List<String> filters) {
-        Status status = Status.PUBLISHED;           // 게시된 게시물만 조회
-        Type type = Type.RECRUITING;
+    public List<PostListResponse> getAllRecruitingList(OrderBy orderBy, List<String> filters) {
+        Status status = Status.PUBLISHED;
 
-        List<Post> posts = new ArrayList<>();
-
-        // 기본 정렬 기준: 마감 임박순
-        if (orderBy == null) {
-            orderBy = OrderBy.CLOSING;
-        }
-
-        switch (orderBy) {
-            case CLOSING -> {
-                LocalDate today = LocalDate.now();
-                posts = postRepository.findByTypeAndStatusAndExposureEndDateGreaterThanEqual(
-                        type, status, today, Sort.by(Sort.Direction.ASC, "exposureEndDate")
-                );
-            }
-
-            case POPULAR -> {
-                posts = postRepository.findByTypeAndStatus(
-                        type, status, Sort.by(Sort.Direction.DESC, "bookmarkCount"));
-            }
-
-            case LATEST -> {
-                posts = postRepository.findByTypeAndStatus(
-                        type, status, Sort.by(Sort.Direction.DESC, "publishedAt"));
-            }
-
-            case OLDEST -> {
-                posts = postRepository.findByTypeAndStatus(
-                        type, status, Sort.by(Sort.Direction.ASC, "publishedAt"));
-            }
-        }
-
-        // 필터링 (기본값: 전체 조회)
-        if (filters != null && !filters.isEmpty()) {
-            posts = posts.stream()
-                    .filter(post -> filters.stream().anyMatch(filter -> post.getBenefit().contains(filter)))
-                    .collect(Collectors.toList());
-        }
-        return posts.stream().map(this::toListResponse).toList();
+        return postService.getAllPostList(Type.RECRUITING, status, orderBy, filters);
     }
-
-    private RecruitingListResponse toListResponse(Post post) {
-        return RecruitingListResponse.builder()
-                .postId(post.getPostId())
-                .userId(post.getUser().getUserId())
-                .type(post.getType())
-                .status(post.getStatus())
-                .exposureEndDate(post.getExposureEndDate())
-                .bookmarkCount(post.getBookmarkCount())
-                .postImageUrl(post.getPostImage())
-                .title(post.getTitle())
-                .target(post.getTarget())
-                .startDate(post.getStartDate())
-                .endDate(post.getEndDate())
-                .benefit(post.getBenefit())
-                .targetNegotiable(post.isTargetNegotiable())
-                .periodNegotiable(post.isPeriodNegotiable())
-                .benefitNegotiable(post.isBenefitNegotiable())
-                .build();
-    }
-
-    // 일반 작성자/조직의 요약 정보 생성
-    private AuthorSummaryResponse buildAuthorSummary(User author, OrgProfile org) {
-        return AuthorSummaryResponse.builder()
-                .image(author.getProfileImage())
-                .rating(author.getOrgProfile().getRating())
-                .name(author.getProfileName())
-                .info(org != null ? org.getIntro() : null)
-                .keywords(org != null ? org.getKeywords() : null)
-                .schoolName(org.getSchoolName())
-                .unitName(org.getUnitName())
-                .phone(org != null ? org.getPhone() : null)
-                .address(org != null ? org.getAddress() : null)
-                .ownerName(org != null ? org.getOwnerName() : null)
-                .linkUrl(org != null ? org.getLinkUrl() : null)
-                .build();
-    }
-
-    // 상점의 요약 정보 생성
-    private StoreSummaryResponse buildStoreSummary(Store store) {
-        return StoreSummaryResponse.builder()
-                .image(store.getStoreImage())
-                .rating(store.getRating())
-                .name(store.getName())
-                .info(store.getInfo())
-                .keywords(store.getKeywords())
-                .category(store.getCategory().name())
-                .operatingHours(store.getOperatingHours())
-                .phone(store.getPhone())
-                .address(store.getAddress())
-                .ownerName(store.getOwnerName())
-                .linkUrl(store.getLinkUrl())
-                .build();
-    }
-
 }
