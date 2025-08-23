@@ -6,8 +6,9 @@ import com.itzi.itzi.posts.domain.OrderBy;
 import com.itzi.itzi.posts.domain.Type;
 import com.itzi.itzi.posts.dto.response.PostDeleteResponse;
 import com.itzi.itzi.posts.dto.response.PostPublishResponse;
+import com.itzi.itzi.posts.dto.response.PostDraftSaveResponse;
 import com.itzi.itzi.recruitings.dto.request.RecruitingAiGenerateRequest;
-import com.itzi.itzi.recruitings.dto.request.RecruitingDraftSaveRequest;
+import com.itzi.itzi.posts.dto.request.PostDraftSaveRequest;
 import com.itzi.itzi.recruitings.dto.response.*;
 import com.itzi.itzi.recruitings.service.RecruitService;
 import lombok.RequiredArgsConstructor;
@@ -40,14 +41,14 @@ public class RecruitingController {
 
     // 임시 저장
     @PostMapping("/draft")
-    public ApiResponse<RecruitingDraftSaveResponse> saveRecruitingDraft(
-            @ModelAttribute RecruitingDraftSaveRequest request
+    public ApiResponse<PostDraftSaveResponse> saveRecruitingDraft(
+            @ModelAttribute PostDraftSaveRequest request
     ) {
         Long fixedUserId = 1L;
         Type fixedType = Type.RECRUITING;
 
 
-        RecruitingDraftSaveResponse response =
+        PostDraftSaveResponse response =
                 recruitService.saveOrUpdateDraft(fixedUserId, fixedType, request);
 
         return ApiResponse.of(SuccessStatus._OK, response);

@@ -6,6 +6,7 @@ import com.itzi.itzi.auth.domain.User;
 import com.itzi.itzi.global.gemini.GeminiService;
 import com.itzi.itzi.posts.dto.response.PostDeleteResponse;
 import com.itzi.itzi.posts.dto.response.PostPublishResponse;
+import com.itzi.itzi.posts.dto.response.PostDraftSaveResponse;
 import com.itzi.itzi.posts.service.PostService;
 import com.itzi.itzi.recruitings.dto.response.AuthorSummaryResponse;
 import com.itzi.itzi.auth.repository.UserRepository;
@@ -18,7 +19,7 @@ import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
 import com.itzi.itzi.posts.repository.PostRepository;
 import com.itzi.itzi.recruitings.dto.request.RecruitingAiGenerateRequest;
-import com.itzi.itzi.recruitings.dto.request.RecruitingDraftSaveRequest;
+import com.itzi.itzi.posts.dto.request.PostDraftSaveRequest;
 import com.itzi.itzi.recruitings.dto.response.*;
 import com.itzi.itzi.store.domain.Store;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +31,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -110,6 +110,23 @@ public class RecruitService {
                 .build();
     }
 
+    // 이미지 업로드/변경
+    private void handleImageUpload(Post entity, MultipartFile file) {
+        if (file == null || file.isEmpty()) return;
+
+        try {
+            // 기존 이미지가 존재한다면 삭제
+            if (entity.getPostImage() != null && !entity.getPostImage().isBlank()) {
+                s3Service.deleteImageUrl(entity.getPostImage());
+            }
+
+            String uploadUrl = s3Service.upload(file);
+            entity.setPostImage(uploadUrl);
+        } catch (IOException e) {
+            throw new GeneralException(ErrorStatus.INTERNAL_ERROR, "이미지 업로드에 실패했습니다.");
+        }
+    }
+
     private void validate(Type type, RecruitingAiGenerateRequest request) {
         if (type == null) {
             throw new GeneralException(ErrorStatus._BAD_REQUEST);
@@ -129,6 +146,10 @@ public class RecruitService {
                 || !hasText(request.getCondition())) {
             throw new GeneralException(ErrorStatus.REQUIRED_FIELD_MISSING);
         }
+    }
+
+    private boolean hasText(String s) {
+        return s != null && !s.isBlank();
     }
 
     private String buildPrompt(Type type, RecruitingAiGenerateRequest r) {
@@ -213,112 +234,20 @@ public class RecruitService {
         );
     }
 
+    // 제휴 모집글 임시 저장
     @Transactional
-    public RecruitingDraftSaveResponse saveOrUpdateDraft(Long userId, Type type, RecruitingDraftSaveRequest request) {
+    public PostDraftSaveResponse
+    saveOrUpdateDraft(Long userId, Type type, PostDraftSaveRequest request) {
 
-        // 임시 저장을 하기 위해서는 최소 1개 이상의 필드가 작성돼 있어야 함
-        validateHasAnyDraftField(request);
-
-        Post entity;
-        if (request.getPostId() != null) {
-            entity = postRepository.findById(request.getPostId())
-                    .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND, "존재하지 않는 postId입니다."));
-
-            // status가 PUBLISHED, DELETED일 경우 임시 저장 불가
-            if (entity.getStatus() != Status.DRAFT) {
-                throw new GeneralException(ErrorStatus._BAD_REQUEST, "임시 저장은 DRAFT 상태의 게시글에만 가능합니다.");
-            }
-
-            // 2) 부분 업데이트(널이면 무시, 값이 있으면 반영)
-            applyPatch(entity, request);
-            handleImageUpload(entity, request.getPostImage());
-
-        } else {
-            // 새 DRAFT 글 생성
-            entity = Post.builder()
-                    .status(Status.DRAFT)
-                    .bookmarkCount(0L)
-                    .build();
-            applyPatch(entity, request);
-            handleImageUpload(entity, request.getPostImage());
+        if (type != Type.RECRUITING) {
+            throw new GeneralException(ErrorStatus.INVALID_TYPE, "RECRUITING 타입의 게시물만 임시 저장할 수 있습니다.");
         }
 
-        // 항상 DRAFT 상태 유지
-        entity.setType(Type.RECRUITING);
-        entity.setStatus(Status.DRAFT);
-
-        Post saved = postRepository.save(entity);
-
-        return new RecruitingDraftSaveResponse(
-                Type.RECRUITING,
-                saved.getPostId(),
-                userId,
-                saved.getStatus(),
-                saved.getUpdatedAt()
-        );
+        return postService.saveOrUpdateDraft(userId, type, request);
     }
 
-    // 이미지 업로드/변경
-    private void handleImageUpload(Post entity, MultipartFile file) {
-        if (file == null || file.isEmpty()) return;
 
-        try {
-            // 기존 이미지가 존재한다면 삭제
-            if (entity.getPostImage() != null && !entity.getPostImage().isBlank()) {
-                s3Service.deleteImageUrl(entity.getPostImage());
-            }
-
-            String uploadUrl = s3Service.upload(file);
-            entity.setPostImage(uploadUrl);
-        } catch (IOException e) {
-            throw new GeneralException(ErrorStatus.INTERNAL_ERROR, "이미지 업로드에 실패했습니다.");
-        }
-    }
-
-    // 임시 저장을 하기 위해서는 최소 1개 이상의 필드가 작성돼 있어야 함
-    private void validateHasAnyDraftField(RecruitingDraftSaveRequest request) {
-        boolean hasAny =
-                request.getPostImage() != null && !request.getPostImage().isEmpty() ||
-                hasText(request.getTitle()) ||
-                hasText(request.getTarget()) ||
-                request.getStartDate() != null || request.getEndDate() != null ||
-                hasText(request.getBenefit()) || hasText(request.getCondition());
-
-        if (!hasAny) {
-            throw new GeneralException(ErrorStatus.REQUIRED_FIELD_MISSING, "임시 저장을 위해서는 1개 이상의 필드가 작성돼 있어야 합니다.");
-        }
-
-        if (request.getStartDate() != null && request.getEndDate() != null && request.getEndDate().isBefore(request.getStartDate())) {
-            throw new GeneralException(ErrorStatus.DATE_RANGE_INVALID);
-        }
-    }
-
-    private boolean hasText(String s) {
-        return s != null && !s.isBlank();
-    }
-
-    // 작성한 부분만 업데이트 (null이면 업데이트 X)
-    private void applyPatch(Post e, RecruitingDraftSaveRequest request) {
-        if (hasText(request.getTitle())) e.setTitle(request.getTitle());
-        if (hasText(request.getTarget())) e.setTarget(request.getTarget());
-
-        if (request.getStartDate() != null) e.setStartDate(request.getStartDate());
-        if (request.getEndDate() != null) e.setEndDate(request.getEndDate());
-
-        if (hasText(request.getBenefit())) e.setBenefit(request.getBenefit());
-        if (hasText(request.getCondition())) e.setCondition(request.getCondition());
-        if (hasText(request.getContent())) e.setContent(request.getContent());
-
-        if (request.getExposureEndDate() != null) e.setExposureEndDate(request.getExposureEndDate());
-
-        if (request.getTargetNegotiable() != null) e.setTargetNegotiable(request.getTargetNegotiable());
-        if (request.getPeriodNegotiable() != null) e.setPeriodNegotiable(request.getPeriodNegotiable());
-        if (request.getTargetNegotiable() != null) e.setTargetNegotiable(request.getTargetNegotiable());
-        if (request.getConditionNegotiable() != null) e.setConditionNegotiable(request.getConditionNegotiable());
-
-    }
-
-    // 제휴 홍보글 게시하기
+    // 제휴 모집글 게시하기
     @Transactional
     public PostPublishResponse publishRecruiting(Long postId) {
 
