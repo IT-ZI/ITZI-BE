@@ -25,9 +25,19 @@ public interface PartnershipRepository extends JpaRepository<Partnership, Long> 
 
     boolean existsBySenderAndReceiver(User sender, User receiver);
 
-    // 보낸 문의 중 특정 상태만 조회 (예: SENT 인 것만)
+    // 보낸 문의 중 특정 상태만 조회
     List<Partnership> findBySenderUserIdAndSendStatus(Long userId, SendStatus sendStatus);
 
-    // 받은 문의 중 특정 응답 상태만 조회 (예: WAITING 인 것만)
+    // 받은 문의 중 특정 응답 상태만 조회
     List<Partnership> findByReceiverUserIdAndSendStatus(Long userId, SendStatus sendStatus);
+
+    // ✅ Accepted 상태의 partnership 조회 (sender/receiver 둘 다 포함)
+    @EntityGraph(attributePaths = {
+            "sender","receiver","sender.orgProfile","sender.store","receiver.orgProfile","receiver.store"
+    })
+    List<Partnership> findByAcceptedStatusAndSenderUserIdOrAcceptedStatusAndReceiverUserId(
+            AcceptedStatus status1, Long senderId,
+            AcceptedStatus status2, Long receiverId
+    );
 }
+
