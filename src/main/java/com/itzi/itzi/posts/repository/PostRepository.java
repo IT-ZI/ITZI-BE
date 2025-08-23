@@ -26,11 +26,11 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     Optional<Post> findByPostIdAndType(Long postId, Type type);
 
     // 모든 사용자가 작성한 제휴 모집글 필터링 조회 : 인기순, 최신순, 오래된순
-    List<Post> findByTypeAndStatus(Type type, Status status, Sort sort);
+    List<Post> findByTypeInAndStatus(List<Type> types, Status status, Sort sort);
 
     // 모든 사용자가 작성한 제휴 모집글 필터링 조회 : 마감 임박순
-    List<Post> findByTypeAndStatusAndExposureEndDateGreaterThanEqual(
-            Type type, Status status, LocalDate today, Sort sort
+    List<Post> findByTypeInAndStatusAndExposureEndDateGreaterThanEqual(
+            List<Type> types, Status status, LocalDate today, Sort sort
     );
 
 
