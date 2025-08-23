@@ -4,6 +4,8 @@ import com.itzi.itzi.auth.domain.OrgProfile;
 import com.itzi.itzi.auth.domain.OrgType;
 import com.itzi.itzi.auth.domain.User;
 import com.itzi.itzi.global.gemini.GeminiService;
+import com.itzi.itzi.posts.dto.response.PostDeleteResponse;
+import com.itzi.itzi.posts.service.PostService;
 import com.itzi.itzi.recruitings.dto.response.AuthorSummaryResponse;
 import com.itzi.itzi.auth.repository.UserRepository;
 import com.itzi.itzi.global.api.code.ErrorStatus;
@@ -41,6 +43,7 @@ public class RecruitService {
     private final UserRepository userRepository;
     private final S3Service s3Service;
     private final GeminiService geminiService;
+    private final PostService postService;
 
     public RecruitingAiGenerateResponse generateRecruitingAi(Long userId, Type type, RecruitingAiGenerateRequest request) {
 
@@ -81,7 +84,7 @@ public class RecruitService {
         // 6. 저장
         Post saved = postRepository.save(entity);
 
-        // 5. 응답 DTO
+        // 7. 응답 DTO
         return RecruitingAiGenerateResponse.builder()
                 .postId(saved.getPostId())
                 .userId(userId)
@@ -353,27 +356,20 @@ public class RecruitService {
         );
     }
 
-    // 제휴 홍보글 삭제하기
+    // 제휴 모집글 삭제하기
     @Transactional
-    public RecruitingDeleteResponse deleteRecruiting(Long postId) {
+    public PostDeleteResponse deleteRecruiting(Long postId) {
 
-        // 존재하는 게시글인지 확인
+        // 1. 게시글 존재 여부 확인
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
 
-        // 게시된 홍보글만 삭제 가능
-        if (post.getStatus() == Status.DELETED || post.getStatus() == Status.DRAFT) {
-            throw new GeneralException(ErrorStatus.CANNOT_DELETE_POST);
+        // 2. 게시글 타입 검증: RECRUITING 타입만 삭제 가능하도록
+        if (post.getType() != Type.RECRUITING) {
+            throw new GeneralException(ErrorStatus.INVALID_TYPE, "RECRUITING 타입의 게시물만 삭제할 수 있습니다.");
         }
 
-        post.setStatus(Status.DELETED);
-        postRepository.save(post);
-
-        return new RecruitingDeleteResponse(
-                Type.RECRUITING,
-                post.getPostId(),
-                post.getStatus()
-        );
+        return postService.deletePost(postId);
     }
 
     // 작성한 게시글 단건 상세 내용 조회

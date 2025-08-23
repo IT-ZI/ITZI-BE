@@ -4,6 +4,7 @@ import com.itzi.itzi.global.api.code.SuccessStatus;
 import com.itzi.itzi.global.api.dto.ApiResponse;
 import com.itzi.itzi.posts.domain.OrderBy;
 import com.itzi.itzi.posts.domain.Type;
+import com.itzi.itzi.posts.dto.response.PostDeleteResponse;
 import com.itzi.itzi.recruitings.dto.request.RecruitingAiGenerateRequest;
 import com.itzi.itzi.recruitings.dto.request.RecruitingDraftSaveRequest;
 import com.itzi.itzi.recruitings.dto.response.*;
@@ -62,9 +63,9 @@ public class RecruitingController {
 
     // 게시물 삭제
     @DeleteMapping("/{postId}")
-    public ApiResponse<RecruitingDeleteResponse> deleteRecruiting(@PathVariable Long postId) {
+    public ApiResponse<PostDeleteResponse> deleteRecruiting(@PathVariable Long postId) {
 
-        RecruitingDeleteResponse response = recruitService.deleteRecruiting(postId);
+        PostDeleteResponse response = recruitService.deleteRecruiting(postId);
         return ApiResponse.of(SuccessStatus._OK, response);
     }
 
