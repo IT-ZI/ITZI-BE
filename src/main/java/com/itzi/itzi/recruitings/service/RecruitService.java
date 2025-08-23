@@ -297,7 +297,8 @@ public class RecruitService {
     @Transactional(readOnly = true)
     public List<PostListResponse> getAllRecruitingList(OrderBy orderBy, List<String> filters) {
         Status status = Status.PUBLISHED;
+        List<Type> types = List.of(Type.RECRUITING);
 
-        return postService.getAllPostList(Type.RECRUITING, status, orderBy, filters);
+        return postService.getAllPostList(types, status, orderBy, filters);
     }
 }

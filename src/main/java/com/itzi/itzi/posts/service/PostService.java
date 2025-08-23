@@ -199,7 +199,7 @@ public class PostService {
 
     // 공통: 모든 사용자가 작성한 게시글 조회
     @Transactional(readOnly = true)
-    public List<PostListResponse> getAllPostList(Type type, Status status, OrderBy orderBy, List<String> filters) {
+    public List<PostListResponse> getAllPostList(List<Type> types, Status status, OrderBy orderBy, List<String> filters) {
 
         List<Post> posts = new ArrayList<>();
 
@@ -211,24 +211,24 @@ public class PostService {
         switch (orderBy) {
             case CLOSING -> {
                 LocalDate today = LocalDate.now();
-                posts = postRepository.findByTypeAndStatusAndExposureEndDateGreaterThanEqual(
-                        type, status, today, Sort.by(Sort.Direction.ASC, "exposureEndDate")
+                posts = postRepository.findByTypeInAndStatusAndExposureEndDateGreaterThanEqual(
+                        types, status, today, Sort.by(Sort.Direction.ASC, "exposureEndDate")
                 );
             }
 
             case POPULAR -> {
-                posts = postRepository.findByTypeAndStatus(
-                        type, status, Sort.by(Sort.Direction.DESC, "bookmarkCount"));
+                posts = postRepository.findByTypeInAndStatus(
+                        types, status, Sort.by(Sort.Direction.DESC, "bookmarkCount"));
             }
 
             case LATEST -> {
-                posts = postRepository.findByTypeAndStatus(
-                        type, status, Sort.by(Sort.Direction.DESC, "publishedAt"));
+                posts = postRepository.findByTypeInAndStatus(
+                        types, status, Sort.by(Sort.Direction.DESC, "publishedAt"));
             }
 
             case OLDEST -> {
-                posts = postRepository.findByTypeAndStatus(
-                        type, status, Sort.by(Sort.Direction.ASC, "publishedAt"));
+                posts = postRepository.findByTypeInAndStatus(
+                        types, status, Sort.by(Sort.Direction.ASC, "publishedAt"));
             }
         }
 
