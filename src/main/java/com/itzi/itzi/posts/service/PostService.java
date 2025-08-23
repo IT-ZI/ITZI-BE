@@ -358,7 +358,7 @@ public class PostService {
                 .name(store.getName())
                 .info(store.getInfo())
                 .keywords(store.getKeywords())
-                .category(store.getCategory().name())
+                .category(store.getCategory().getDescription())
                 .operatingHours(store.getOperatingHours())
                 .phone(store.getPhone())
                 .address(store.getAddress())
