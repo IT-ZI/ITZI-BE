@@ -33,6 +33,20 @@ public class AgreementController {
     }
 
     /**
+     * 협약서 문서 변환 (AI 자동 생성)
+     * 상태: GENERATED
+     * 👉 'AI 자동 변환하기' 버튼을 누르면 호출됨
+     */
+    @PostMapping("/ai/{partnershipId}")
+    public ResponseEntity<ApiResponse<AgreementDetailResponseDTO>> generateAgreementAi(
+            @PathVariable Long partnershipId
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                agreementService.generateAgreementAi(partnershipId)
+        ));
+    }
+
+    /**
      * 협약서 문서 변환
      * 상태: DRAFT → GENERATED
      * 👉 '문서 변환하기' 버튼을 누르면 호출됨
