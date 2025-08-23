@@ -11,6 +11,7 @@ public class AgreementRequestDTO {
 
     private Long senderId;
     private Long receiverId;
+    private Long partnershipId;
 
     private String senderName;
     private String receiverName;
