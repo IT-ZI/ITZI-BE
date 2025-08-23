@@ -1,5 +1,6 @@
 package com.itzi.itzi.promotion.dto.response;
 
+import com.itzi.itzi.auth.domain.Category;
 import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
 import lombok.*;
@@ -17,7 +18,7 @@ public class PromotionDetailResponse {
     private Long userId;
 
     private LocalDate exposureEndDate;
-    // 카테고리 추가 필요
+    private Category category;
     private Long bookmarkCount;
 
     private Type type;
@@ -34,4 +35,5 @@ public class PromotionDetailResponse {
 
     private Object sender;              // 제휴 제안자
     private Object receiver;            // 제휴 대상자
+
 }

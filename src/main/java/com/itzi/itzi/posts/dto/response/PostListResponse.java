@@ -1,5 +1,6 @@
 package com.itzi.itzi.posts.dto.response;
 
+import com.itzi.itzi.auth.domain.Category;
 import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
 import lombok.AllArgsConstructor;
@@ -18,6 +19,7 @@ public class PostListResponse {
     private Long postId;
     private Long userId;
 
+    private Category category;
     private Type type;
     private Status status;
 

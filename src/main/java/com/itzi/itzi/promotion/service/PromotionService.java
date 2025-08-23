@@ -362,6 +362,7 @@ public class PromotionService {
 
         return PromotionDetailResponse.builder()
                 .userId(1L)                     // userId는 1로 고정
+                .category(post.getCategory())
                 .postId(post.getPostId())
                 .type(post.getType())
                 .status(post.getStatus())
