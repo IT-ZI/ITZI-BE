@@ -13,6 +13,8 @@ import java.util.Set;
 @AllArgsConstructor
 public class AuthorSummaryResponse {
 
+    private Long userId;
+
     private String image;
     private Integer rating;
     private String name;
