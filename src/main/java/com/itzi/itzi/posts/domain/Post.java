@@ -2,6 +2,7 @@ package com.itzi.itzi.posts.domain;
 
 import com.itzi.itzi.agreement.domain.Agreement;
 import com.itzi.itzi.auth.domain.User;
+import com.itzi.itzi.partnership.domain.Partnership;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -9,6 +10,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Getter
@@ -96,6 +99,10 @@ public class Post {
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "agreement_id")
     private Agreement agreement;
+
+    // Post ↔ Partnership (1:N)
+    @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Partnership> partnerships = new ArrayList<>();
 
     @ManyToOne
     @JoinColumn(name = "sender_id")
