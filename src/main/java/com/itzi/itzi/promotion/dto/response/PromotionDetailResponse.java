@@ -32,5 +32,6 @@ public class PromotionDetailResponse {
     private String condition;
     private String content;
 
-    // 작성자 정보 블럭 추가 필요
+    private Object sender;              // 제휴 제안자
+    private Object receiver;            // 제휴 대상자
 }

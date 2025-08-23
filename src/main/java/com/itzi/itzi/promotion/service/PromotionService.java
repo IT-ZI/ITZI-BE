@@ -329,6 +329,31 @@ public class PromotionService {
             throw new GeneralException(ErrorStatus.INVALID_TYPE, "해당 게시글은 제휴 홍보글이 아닙니다.");
         }
 
+        // Post 엔티티에 연결된 Agreement 엔티티 가져오기
+        Agreement agreement = post.getAgreement();
+        if (agreement == null) {
+            // 제휴 협약서가 없는 경우
+            throw new GeneralException(ErrorStatus.NOT_FOUND, "해당 게시글에 연결된 협약서가 없습니다.");
+        }
+
+        // 발신자 정보 처리
+        Object senderInfo = null;
+        if (Boolean.TRUE.equals(post.getExposeProposerInfo())) {
+            User sender = agreement.getSender();
+            if (sender != null) {
+                senderInfo = postService.buildAuthorSummary(sender);
+            }
+        }
+
+        // 수신자 정보 처리
+        Object receiverInfo = null;
+        if (Boolean.TRUE.equals(post.getExposeTargetInfo())) {
+            User receiver = agreement.getReceiver();
+            if (receiver != null) {
+                receiverInfo = postService.buildAuthorSummary(receiver);
+            }
+        }
+
         return PromotionDetailResponse.builder()
                 .userId(1L)                     // userId는 1로 고정
                 .postId(post.getPostId())
@@ -344,6 +369,8 @@ public class PromotionService {
                 .benefit(post.getBenefit())
                 .condition(post.getCondition())
                 .content(post.getContent())
+                .sender(senderInfo)
+                .receiver(receiverInfo)
                 .build();
     }
 
