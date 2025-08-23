@@ -22,6 +22,9 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             Collection<Status> statuses
     );
 
+    // postId와 type으로 게시글을 찾는 메서드 추가
+    Optional<Post> findByPostIdAndType(Long postId, Type type);
+
     // 모든 사용자가 작성한 제휴 모집글 필터링 조회 : 인기순, 최신순, 오래된순
     List<Post> findByTypeAndStatus(Type type, Status status, Sort sort);
 
