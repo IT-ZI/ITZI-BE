@@ -5,6 +5,7 @@ import com.itzi.itzi.global.api.dto.ApiResponse;
 import com.itzi.itzi.posts.domain.OrderBy;
 import com.itzi.itzi.posts.domain.Type;
 import com.itzi.itzi.posts.dto.response.PostDeleteResponse;
+import com.itzi.itzi.posts.dto.response.PostPublishResponse;
 import com.itzi.itzi.recruitings.dto.request.RecruitingAiGenerateRequest;
 import com.itzi.itzi.recruitings.dto.request.RecruitingDraftSaveRequest;
 import com.itzi.itzi.recruitings.dto.response.*;
@@ -54,9 +55,9 @@ public class RecruitingController {
 
     // 제휴 홍보글 게시하기
     @PatchMapping("/{postId}/publish")
-    public ApiResponse<RecruitingPublishResponse> publishRecruiting(@PathVariable Long postId) {
+    public ApiResponse<PostPublishResponse> publishRecruiting(@PathVariable Long postId) {
 
-        RecruitingPublishResponse response = recruitService.publishRecruiting(postId);
+        PostPublishResponse response = recruitService.publishRecruiting(postId);
 
         return ApiResponse.of(SuccessStatus._OK, response);
     }

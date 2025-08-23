@@ -5,6 +5,7 @@ import com.itzi.itzi.auth.domain.OrgType;
 import com.itzi.itzi.auth.domain.User;
 import com.itzi.itzi.global.gemini.GeminiService;
 import com.itzi.itzi.posts.dto.response.PostDeleteResponse;
+import com.itzi.itzi.posts.dto.response.PostPublishResponse;
 import com.itzi.itzi.posts.service.PostService;
 import com.itzi.itzi.recruitings.dto.response.AuthorSummaryResponse;
 import com.itzi.itzi.auth.repository.UserRepository;
@@ -319,41 +320,18 @@ public class RecruitService {
 
     // 제휴 홍보글 게시하기
     @Transactional
-    public RecruitingPublishResponse publishRecruiting(Long postId) {
+    public PostPublishResponse publishRecruiting(Long postId) {
 
-        // 존재하는 게시글인지 확인
+        // 1. 존재하는 게시글인지 확인
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
 
-        // 이미 게시된 글인지 확인
-        if (post.getStatus() == Status.PUBLISHED) {
-            throw new GeneralException(ErrorStatus.ALREADY_PUBLISHED);
+        // 2. 게시글 타입 검증: RECRUITING 타입만 업로드 가능하도록
+        if (post.getType() != Type.RECRUITING) {
+            throw new GeneralException(ErrorStatus.INVALID_TYPE, "RECRUITING 타입의 게시물만 업로드할 수 있습니다.");
         }
 
-        // 제휴 모집글 게시를 위해서는 모든 필드가 작성돼야 함
-        if (post.getPostImage() == null ||
-            post.getTitle() == null || post.getTitle().isBlank() ||
-            post.getTarget() == null || post.getTarget().isBlank() ||
-            post.getStartDate() == null || post.getEndDate() == null ||
-            post.getBenefit() ==  null || post.getBenefit().isBlank() ||
-            post.getCondition() == null || post.getCondition().isBlank() ||
-            post.getContent() == null || post.getContent().isBlank() ||
-            post.getExposureEndDate() == null ) {
-            throw new GeneralException(ErrorStatus.REQUIRED_FIELD_MISSING);
-        }
-
-        // 게시 상태로 변경 및 생성 시간 업데이트
-        post.setStatus(Status.PUBLISHED);
-        post.setPublishedAt(LocalDateTime.now());
-
-        postRepository.save(post);
-
-        return new RecruitingPublishResponse(
-                Type.RECRUITING,
-                post.getPostId(),
-                post.getStatus(),
-                post.getPublishedAt()
-        );
+        return postService.pusblishPost(postId);
     }
 
     // 제휴 모집글 삭제하기
