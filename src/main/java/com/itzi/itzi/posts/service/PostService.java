@@ -164,7 +164,6 @@ public class PostService {
         User author = post.getUser();
         Object authorSummary = buildAuthorSummary(author);
 
-        // NOTE: 이 응답 DTO는 모든 게시글 타입에 대한 공통 DTO여야 합니다.
         return PostDetailResponse.builder()
                 .userId(author.getUserId())
                 .postId(post.getPostId())
@@ -241,8 +240,8 @@ public class PostService {
         return posts.stream().map(this::toListResponse).toList();
     }
 
-    // 작성자 정보 요약 생성 (OrgProfile, Store 등은 User 엔티티 내에 포함되어 있다고 가정)
-    private Object buildAuthorSummary(User author) {
+    // 작성자 정보 요약 생성
+    public Object buildAuthorSummary(User author) {
         if (author.getOrgProfile() != null && author.getOrgProfile().getOrgType() == OrgType.STORE) {
             return buildStoreSummary(author.getStore());
         } else {
@@ -295,7 +294,7 @@ public class PostService {
     }
 
     // 이미지 업로드/변경
-    private void handleImageUpload(Post entity, MultipartFile file) {
+    public void handleImageUpload(Post entity, MultipartFile file) {
         if (file == null || file.isEmpty()) return;
 
         try {
@@ -334,6 +333,7 @@ public class PostService {
     // 일반 작성자/조직의 요약 정보 생성
     private AuthorSummaryResponse buildAuthorSummary(User author, OrgProfile org) {
         return AuthorSummaryResponse.builder()
+                .userId(author.getUserId())
                 .image(author.getProfileImage())
                 .rating(author.getOrgProfile().getRating())
                 .name(author.getProfileName())
@@ -351,6 +351,7 @@ public class PostService {
     // 상점의 요약 정보 생성
     private StoreSummaryResponse buildStoreSummary(Store store) {
         return StoreSummaryResponse.builder()
+                .userId(store.getUser().getUserId())
                 .image(store.getStoreImage())
                 .rating(store.getRating())
                 .name(store.getName())
