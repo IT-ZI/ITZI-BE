@@ -1,4 +1,4 @@
-package com.itzi.itzi.recruitings.dto.response;
+package com.itzi.itzi.posts.dto.response;
 
 import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
@@ -13,7 +13,7 @@ import java.time.LocalDate;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class RecruitingListResponse {
+public class PostListResponse {
 
     private Long postId;
     private Long userId;

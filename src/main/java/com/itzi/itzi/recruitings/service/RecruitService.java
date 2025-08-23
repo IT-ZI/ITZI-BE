@@ -4,6 +4,8 @@ import com.itzi.itzi.auth.domain.OrgProfile;
 import com.itzi.itzi.auth.domain.OrgType;
 import com.itzi.itzi.auth.domain.User;
 import com.itzi.itzi.global.gemini.GeminiService;
+import com.itzi.itzi.posts.dto.response.*;
+import com.itzi.itzi.posts.service.PostService;
 import com.itzi.itzi.recruitings.dto.response.AuthorSummaryResponse;
 import com.itzi.itzi.auth.repository.UserRepository;
 import com.itzi.itzi.global.api.code.ErrorStatus;
@@ -15,7 +17,7 @@ import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
 import com.itzi.itzi.posts.repository.PostRepository;
 import com.itzi.itzi.recruitings.dto.request.RecruitingAiGenerateRequest;
-import com.itzi.itzi.recruitings.dto.request.RecruitingDraftSaveRequest;
+import com.itzi.itzi.posts.dto.request.PostDraftSaveRequest;
 import com.itzi.itzi.recruitings.dto.response.*;
 import com.itzi.itzi.store.domain.Store;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +29,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -41,6 +42,7 @@ public class RecruitService {
     private final UserRepository userRepository;
     private final S3Service s3Service;
     private final GeminiService geminiService;
+    private final PostService postService;
 
     public RecruitingAiGenerateResponse generateRecruitingAi(Long userId, Type type, RecruitingAiGenerateRequest request) {
 
@@ -81,7 +83,7 @@ public class RecruitService {
         // 6. 저장
         Post saved = postRepository.save(entity);
 
-        // 5. 응답 DTO
+        // 7. 응답 DTO
         return RecruitingAiGenerateResponse.builder()
                 .postId(saved.getPostId())
                 .userId(userId)
@@ -106,6 +108,23 @@ public class RecruitService {
                 .build();
     }
 
+    // 이미지 업로드/변경
+    private void handleImageUpload(Post entity, MultipartFile file) {
+        if (file == null || file.isEmpty()) return;
+
+        try {
+            // 기존 이미지가 존재한다면 삭제
+            if (entity.getPostImage() != null && !entity.getPostImage().isBlank()) {
+                s3Service.deleteImageUrl(entity.getPostImage());
+            }
+
+            String uploadUrl = s3Service.upload(file);
+            entity.setPostImage(uploadUrl);
+        } catch (IOException e) {
+            throw new GeneralException(ErrorStatus.INTERNAL_ERROR, "이미지 업로드에 실패했습니다.");
+        }
+    }
+
     private void validate(Type type, RecruitingAiGenerateRequest request) {
         if (type == null) {
             throw new GeneralException(ErrorStatus._BAD_REQUEST);
@@ -125,6 +144,10 @@ public class RecruitService {
                 || !hasText(request.getCondition())) {
             throw new GeneralException(ErrorStatus.REQUIRED_FIELD_MISSING);
         }
+    }
+
+    private boolean hasText(String s) {
+        return s != null && !s.isBlank();
     }
 
     private String buildPrompt(Type type, RecruitingAiGenerateRequest r) {
@@ -209,331 +232,72 @@ public class RecruitService {
         );
     }
 
+    // 제휴 모집글 임시 저장
     @Transactional
-    public RecruitingDraftSaveResponse saveOrUpdateDraft(Long userId, Type type, RecruitingDraftSaveRequest request) {
+    public PostDraftSaveResponse
+    saveOrUpdateDraft(Long userId, Type type, PostDraftSaveRequest request) {
 
-        // 임시 저장을 하기 위해서는 최소 1개 이상의 필드가 작성돼 있어야 함
-        validateHasAnyDraftField(request);
-
-        Post entity;
-        if (request.getPostId() != null) {
-            entity = postRepository.findById(request.getPostId())
-                    .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND, "존재하지 않는 postId입니다."));
-
-            // status가 PUBLISHED, DELETED일 경우 임시 저장 불가
-            if (entity.getStatus() != Status.DRAFT) {
-                throw new GeneralException(ErrorStatus._BAD_REQUEST, "임시 저장은 DRAFT 상태의 게시글에만 가능합니다.");
-            }
-
-            // 2) 부분 업데이트(널이면 무시, 값이 있으면 반영)
-            applyPatch(entity, request);
-            handleImageUpload(entity, request.getPostImage());
-
-        } else {
-            // 새 DRAFT 글 생성
-            entity = Post.builder()
-                    .status(Status.DRAFT)
-                    .bookmarkCount(0L)
-                    .build();
-            applyPatch(entity, request);
-            handleImageUpload(entity, request.getPostImage());
+        if (type != Type.RECRUITING) {
+            throw new GeneralException(ErrorStatus.INVALID_TYPE, "RECRUITING 타입의 게시물만 임시 저장할 수 있습니다.");
         }
 
-        // 항상 DRAFT 상태 유지
-        entity.setType(Type.RECRUITING);
-        entity.setStatus(Status.DRAFT);
-
-        Post saved = postRepository.save(entity);
-
-        return new RecruitingDraftSaveResponse(
-                Type.RECRUITING,
-                saved.getPostId(),
-                userId,
-                saved.getStatus(),
-                saved.getUpdatedAt()
-        );
+        return postService.saveOrUpdateDraft(userId, type, request);
     }
 
-    // 이미지 업로드/변경
-    private void handleImageUpload(Post entity, MultipartFile file) {
-        if (file == null || file.isEmpty()) return;
 
-        try {
-            // 기존 이미지가 존재한다면 삭제
-            if (entity.getPostImage() != null && !entity.getPostImage().isBlank()) {
-                s3Service.deleteImageUrl(entity.getPostImage());
-            }
-
-            String uploadUrl = s3Service.upload(file);
-            entity.setPostImage(uploadUrl);
-        } catch (IOException e) {
-            throw new GeneralException(ErrorStatus.INTERNAL_ERROR, "이미지 업로드에 실패했습니다.");
-        }
-    }
-
-    // 임시 저장을 하기 위해서는 최소 1개 이상의 필드가 작성돼 있어야 함
-    private void validateHasAnyDraftField(RecruitingDraftSaveRequest request) {
-        boolean hasAny =
-                request.getPostImage() != null && !request.getPostImage().isEmpty() ||
-                hasText(request.getTitle()) ||
-                hasText(request.getTarget()) ||
-                request.getStartDate() != null || request.getEndDate() != null ||
-                hasText(request.getBenefit()) || hasText(request.getCondition());
-
-        if (!hasAny) {
-            throw new GeneralException(ErrorStatus.REQUIRED_FIELD_MISSING, "임시 저장을 위해서는 1개 이상의 필드가 작성돼 있어야 합니다.");
-        }
-
-        if (request.getStartDate() != null && request.getEndDate() != null && request.getEndDate().isBefore(request.getStartDate())) {
-            throw new GeneralException(ErrorStatus.DATE_RANGE_INVALID);
-        }
-    }
-
-    private boolean hasText(String s) {
-        return s != null && !s.isBlank();
-    }
-
-    // 작성한 부분만 업데이트 (null이면 업데이트 X)
-    private void applyPatch(Post e, RecruitingDraftSaveRequest request) {
-        if (hasText(request.getTitle())) e.setTitle(request.getTitle());
-        if (hasText(request.getTarget())) e.setTarget(request.getTarget());
-
-        if (request.getStartDate() != null) e.setStartDate(request.getStartDate());
-        if (request.getEndDate() != null) e.setEndDate(request.getEndDate());
-
-        if (hasText(request.getBenefit())) e.setBenefit(request.getBenefit());
-        if (hasText(request.getCondition())) e.setCondition(request.getCondition());
-        if (hasText(request.getContent())) e.setContent(request.getContent());
-
-        if (request.getExposureEndDate() != null) e.setExposureEndDate(request.getExposureEndDate());
-
-        if (request.getTargetNegotiable() != null) e.setTargetNegotiable(request.getTargetNegotiable());
-        if (request.getPeriodNegotiable() != null) e.setPeriodNegotiable(request.getPeriodNegotiable());
-        if (request.getTargetNegotiable() != null) e.setTargetNegotiable(request.getTargetNegotiable());
-        if (request.getConditionNegotiable() != null) e.setConditionNegotiable(request.getConditionNegotiable());
-
-    }
-
-    // 제휴 홍보글 게시하기
+    // 제휴 모집글 게시하기
     @Transactional
-    public RecruitingPublishResponse publishRecruiting(Long postId) {
+    public PostPublishResponse publishRecruiting(Long postId) {
 
-        // 존재하는 게시글인지 확인
+        // 1. 존재하는 게시글인지 확인
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
 
-        // 이미 게시된 글인지 확인
-        if (post.getStatus() == Status.PUBLISHED) {
-            throw new GeneralException(ErrorStatus.ALREADY_PUBLISHED);
+        // 2. 게시글 타입 검증: RECRUITING 타입만 업로드 가능하도록
+        if (post.getType() != Type.RECRUITING) {
+            throw new GeneralException(ErrorStatus.INVALID_TYPE, "RECRUITING 타입의 게시물만 업로드할 수 있습니다.");
         }
 
-        // 제휴 모집글 게시를 위해서는 모든 필드가 작성돼야 함
-        if (post.getPostImage() == null ||
-            post.getTitle() == null || post.getTitle().isBlank() ||
-            post.getTarget() == null || post.getTarget().isBlank() ||
-            post.getStartDate() == null || post.getEndDate() == null ||
-            post.getBenefit() ==  null || post.getBenefit().isBlank() ||
-            post.getCondition() == null || post.getCondition().isBlank() ||
-            post.getContent() == null || post.getContent().isBlank() ||
-            post.getExposureEndDate() == null ) {
-            throw new GeneralException(ErrorStatus.REQUIRED_FIELD_MISSING);
-        }
-
-        // 게시 상태로 변경 및 생성 시간 업데이트
-        post.setStatus(Status.PUBLISHED);
-        post.setPublishedAt(LocalDateTime.now());
-
-        postRepository.save(post);
-
-        return new RecruitingPublishResponse(
-                Type.RECRUITING,
-                post.getPostId(),
-                post.getStatus(),
-                post.getPublishedAt()
-        );
+        return postService.pusblishPost(postId);
     }
 
-    // 제휴 홍보글 삭제하기
+    // 제휴 모집글 삭제하기
     @Transactional
-    public RecruitingDeleteResponse deleteRecruiting(Long postId) {
+    public PostDeleteResponse deleteRecruiting(Long postId) {
 
-        // 존재하는 게시글인지 확인
+        // 1. 게시글 존재 여부 확인
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
 
-        // 게시된 홍보글만 삭제 가능
-        if (post.getStatus() == Status.DELETED || post.getStatus() == Status.DRAFT) {
-            throw new GeneralException(ErrorStatus.CANNOT_DELETE_POST);
+        // 2. 게시글 타입 검증: RECRUITING 타입만 삭제 가능하도록
+        if (post.getType() != Type.RECRUITING) {
+            throw new GeneralException(ErrorStatus.INVALID_TYPE, "RECRUITING 타입의 게시물만 삭제할 수 있습니다.");
         }
 
-        post.setStatus(Status.DELETED);
-        postRepository.save(post);
-
-        return new RecruitingDeleteResponse(
-                Type.RECRUITING,
-                post.getPostId(),
-                post.getStatus()
-        );
+        return postService.deletePost(postId);
     }
 
     // 작성한 게시글 단건 상세 내용 조회
     @Transactional(readOnly = true)
-    public RecruitingDetailResponse getRecruitingDetail(Long postId) {
-
-        // 존재하는 게시글인지 확인
-        Post post = postRepository.findRecruitingDetailWithAuthor(postId, Type.RECRUITING)
-                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
-
-        User author = post.getUser();
-
-        // 작성자 요약 블럭
-        OrgProfile org = author.getOrgProfile();
-        Store store = author.getStore();
-
-        // 작성자 타입에 따라 다른 요약 블럭을 생성
-        Object authorSummary;
-        if (org != null && org.getOrgType() == OrgType.STORE) {
-            // OrgType이 STORE일 경우, buildStoreSummary 메서드 사용
-            authorSummary = buildStoreSummary(store);
-        } else {
-            // 그 외의 경우, buildAuthorSummary 메서드 사용
-            authorSummary = buildAuthorSummary(author, org);
-        }
-
-        return RecruitingDetailResponse.builder()
-                .userId(author.getUserId())
-                .postId(post.getPostId())
-                .type(post.getType())
-                .status(post.getStatus())
-                .exposureEndDate(post.getExposureEndDate())
-                .bookmarkCount(post.getBookmarkCount())
-                .title(post.getTitle())
-                .target(post.getTarget())
-                .targetNegotiable(post.isTargetNegotiable())
-                .startDate(post.getStartDate())
-                .endDate(post.getEndDate())
-                .periodNegotiable(post.isPeriodNegotiable())
-                .benefit(post.getBenefit())
-                .benefitNegotiable(post.isBenefitNegotiable())
-                .condition(post.getCondition())
-                .conditionNegotiable(post.isConditionNegotiable())
-                .postImageUrl(post.getPostImage())
-                .content(post.getContent())
-                .author(authorSummary)
-                .build();
+    public PostDetailResponse getRecruitingDetail(Long postId) {
+        return postService.getPostDetail(postId, Type.RECRUITING);
     }
 
     // 내가 작성한 게시글 전체 리스트 조회 (userId = 1 고정)
     @Transactional(readOnly = true)
-    public List<RecruitingListResponse> getMyRecruitingList() {
+    public List<PostListResponse> getMyRecruitingList() {
         Long FIXED_USER_ID = 1L;
         List<Status> statuses = List.of(Status.DRAFT, Status.PUBLISHED);
-        Type type = Type.RECRUITING;
 
-        return postRepository.findByUser_UserIdAndTypeAndStatusIn(FIXED_USER_ID, type, statuses)
-                .stream()
-                .map(this::toListResponse)
-                .toList();
+        return postService.getMyPostList(FIXED_USER_ID, statuses, Type.RECRUITING);
+
     }
 
     // 모든 사용자가 작성한 제휴 모집글 조회
     @Transactional(readOnly = true)
-    public List<RecruitingListResponse> getAllRecruitingList(OrderBy orderBy, List<String> filters) {
-        Status status = Status.PUBLISHED;           // 게시된 게시물만 조회
-        Type type = Type.RECRUITING;
+    public List<PostListResponse> getAllRecruitingList(OrderBy orderBy, List<String> filters) {
+        Status status = Status.PUBLISHED;
 
-        List<Post> posts = new ArrayList<>();
-
-        // 기본 정렬 기준: 마감 임박순
-        if (orderBy == null) {
-            orderBy = OrderBy.CLOSING;
-        }
-
-        switch (orderBy) {
-            case CLOSING -> {
-                LocalDate today = LocalDate.now();
-                posts = postRepository.findByTypeAndStatusAndExposureEndDateGreaterThanEqual(
-                        type, status, today, Sort.by(Sort.Direction.ASC, "exposureEndDate")
-                );
-            }
-
-            case POPULAR -> {
-                posts = postRepository.findByTypeAndStatus(
-                        type, status, Sort.by(Sort.Direction.DESC, "bookmarkCount"));
-            }
-
-            case LATEST -> {
-                posts = postRepository.findByTypeAndStatus(
-                        type, status, Sort.by(Sort.Direction.DESC, "publishedAt"));
-            }
-
-            case OLDEST -> {
-                posts = postRepository.findByTypeAndStatus(
-                        type, status, Sort.by(Sort.Direction.ASC, "publishedAt"));
-            }
-        }
-
-        // 필터링 (기본값: 전체 조회)
-        if (filters != null && !filters.isEmpty()) {
-            posts = posts.stream()
-                    .filter(post -> filters.stream().anyMatch(filter -> post.getBenefit().contains(filter)))
-                    .collect(Collectors.toList());
-        }
-        return posts.stream().map(this::toListResponse).toList();
+        return postService.getAllPostList(Type.RECRUITING, status, orderBy, filters);
     }
-
-    private RecruitingListResponse toListResponse(Post post) {
-        return RecruitingListResponse.builder()
-                .postId(post.getPostId())
-                .userId(post.getUser().getUserId())
-                .type(post.getType())
-                .status(post.getStatus())
-                .exposureEndDate(post.getExposureEndDate())
-                .bookmarkCount(post.getBookmarkCount())
-                .postImageUrl(post.getPostImage())
-                .title(post.getTitle())
-                .target(post.getTarget())
-                .startDate(post.getStartDate())
-                .endDate(post.getEndDate())
-                .benefit(post.getBenefit())
-                .targetNegotiable(post.isTargetNegotiable())
-                .periodNegotiable(post.isPeriodNegotiable())
-                .benefitNegotiable(post.isBenefitNegotiable())
-                .build();
-    }
-
-    // 일반 작성자/조직의 요약 정보 생성
-    private AuthorSummaryResponse buildAuthorSummary(User author, OrgProfile org) {
-        return AuthorSummaryResponse.builder()
-                .image(author.getProfileImage())
-                .rating(author.getOrgProfile().getRating())
-                .name(author.getProfileName())
-                .info(org != null ? org.getIntro() : null)
-                .keywords(org != null ? org.getKeywords() : null)
-                .schoolName(org.getSchoolName())
-                .unitName(org.getUnitName())
-                .phone(org != null ? org.getPhone() : null)
-                .address(org != null ? org.getAddress() : null)
-                .ownerName(org != null ? org.getOwnerName() : null)
-                .linkUrl(org != null ? org.getLinkUrl() : null)
-                .build();
-    }
-
-    // 상점의 요약 정보 생성
-    private StoreSummaryResponse buildStoreSummary(Store store) {
-        return StoreSummaryResponse.builder()
-                .image(store.getStoreImage())
-                .rating(store.getRating())
-                .name(store.getName())
-                .info(store.getInfo())
-                .keywords(store.getKeywords())
-                .category(store.getCategory().name())
-                .operatingHours(store.getOperatingHours())
-                .phone(store.getPhone())
-                .address(store.getAddress())
-                .ownerName(store.getOwnerName())
-                .linkUrl(store.getLinkUrl())
-                .build();
-    }
-
 }

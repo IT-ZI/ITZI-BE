@@ -1,4 +1,4 @@
-package com.itzi.itzi.recruitings.dto.response;
+package com.itzi.itzi.posts.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.itzi.itzi.posts.domain.Status;
@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @AllArgsConstructor
-public class RecruitingPublishResponse {
+public class PostPublishResponse {
 
     private Type type;
     private Long postId;

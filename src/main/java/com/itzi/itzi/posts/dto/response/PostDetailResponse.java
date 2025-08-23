@@ -1,4 +1,4 @@
-package com.itzi.itzi.recruitings.dto.response;
+package com.itzi.itzi.posts.dto.response;
 
 import com.itzi.itzi.auth.domain.Category;
 import com.itzi.itzi.posts.domain.Status;
@@ -9,13 +9,12 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
-import java.util.Objects;
 
 @Getter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class RecruitingDetailResponse {
+public class PostDetailResponse {
 
     private Long postId;
     private Long userId;

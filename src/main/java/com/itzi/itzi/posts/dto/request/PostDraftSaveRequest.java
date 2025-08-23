@@ -1,5 +1,6 @@
-package com.itzi.itzi.recruitings.dto.request;
+package com.itzi.itzi.posts.dto.request;
 
+import com.itzi.itzi.posts.domain.Type;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.web.multipart.MultipartFile;
@@ -8,7 +9,7 @@ import java.time.LocalDate;
 
 @Getter
 @Setter
-public class RecruitingDraftSaveRequest {
+public class PostDraftSaveRequest {
 
     // 존재할 경우 해당 DRAFT 글 업데이트, 없으면 생성
     private Long postId;

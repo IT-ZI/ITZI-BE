@@ -1,4 +1,4 @@
-package com.itzi.itzi.recruitings.dto.response;
+package com.itzi.itzi.posts.dto.response;
 
 import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
@@ -9,7 +9,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @AllArgsConstructor
-public class RecruitingDeleteResponse {
+public class PostDeleteResponse {
 
     private Type type;
     private Long postId;
