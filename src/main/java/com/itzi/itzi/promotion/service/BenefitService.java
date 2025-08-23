@@ -11,6 +11,7 @@ import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
 import com.itzi.itzi.posts.dto.request.PostDraftSaveRequest;
 import com.itzi.itzi.posts.dto.response.PostDraftSaveResponse;
+import com.itzi.itzi.posts.dto.response.PostPublishResponse;
 import com.itzi.itzi.posts.repository.PostRepository;
 import com.itzi.itzi.posts.service.PostService;
 import com.itzi.itzi.promotion.dto.request.BenefitGenerateAiRequest;
@@ -99,6 +100,22 @@ public class BenefitService {
         }
 
         return postService.saveOrUpdateDraft(userId, type, request);
+    }
+
+    // 제휴 홍보 게시글 업로드
+    @Transactional
+    public PostPublishResponse publishBenefit(Long postId) {
+
+        // 1. 존재하는 게시글인지 확인
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
+
+        // 2. 게시글 타입 검증: BENEFIT 타입만 업로드 가능하도록
+        if (post.getType() != Type.BENEFIT) {
+            throw new GeneralException(ErrorStatus.INVALID_TYPE, "BENEFIT 타입의 게시물만 업로드할 수 있습니다.");
+        }
+
+        return postService.pusblishPost(postId);
     }
 
     private void validate(BenefitGenerateAiRequest request) {
