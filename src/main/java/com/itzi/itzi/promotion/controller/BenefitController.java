@@ -3,6 +3,8 @@ package com.itzi.itzi.promotion.controller;
 import com.itzi.itzi.global.api.code.SuccessStatus;
 import com.itzi.itzi.global.api.dto.ApiResponse;
 import com.itzi.itzi.posts.domain.Type;
+import com.itzi.itzi.posts.dto.request.PostDraftSaveRequest;
+import com.itzi.itzi.posts.dto.response.PostDraftSaveResponse;
 import com.itzi.itzi.promotion.dto.request.BenefitGenerateAiRequest;
 import com.itzi.itzi.promotion.dto.response.BenefitGenerateAiResponse;
 import com.itzi.itzi.promotion.service.BenefitService;
@@ -32,4 +34,19 @@ public class BenefitController {
 
         return ApiResponse.of(SuccessStatus._OK, response);
     }
+
+    // 임시 저장
+    @PostMapping("/draft")
+    public ApiResponse<PostDraftSaveResponse> saveOrUpdateDraft(
+            @ModelAttribute PostDraftSaveRequest request
+    ) {
+        Long fixedUserId = 1L;
+        Type fixedType = Type.BENEFIT;
+
+        PostDraftSaveResponse response =
+                benefitService.saveOrUpdateDraft(fixedUserId, fixedType, request);
+
+        return ApiResponse.of(SuccessStatus._OK, response);
+    }
+
 }

@@ -9,12 +9,16 @@ import com.itzi.itzi.global.s3.S3Service;
 import com.itzi.itzi.posts.domain.Post;
 import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
+import com.itzi.itzi.posts.dto.request.PostDraftSaveRequest;
+import com.itzi.itzi.posts.dto.response.PostDraftSaveResponse;
 import com.itzi.itzi.posts.repository.PostRepository;
+import com.itzi.itzi.posts.service.PostService;
 import com.itzi.itzi.promotion.dto.request.BenefitGenerateAiRequest;
 import com.itzi.itzi.promotion.dto.response.BenefitGenerateAiResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -29,6 +33,7 @@ public class BenefitService {
     private final S3Service s3Service;
     private final GeminiService geminiService;
     private final UserRepository userRepository;
+    private final PostService postService;
 
     // 혜택 홍보 게시글 상세 정보 AI 반환
     public BenefitGenerateAiResponse generateBenefitAi(Long userId, Type type, BenefitGenerateAiRequest request) {
@@ -83,6 +88,17 @@ public class BenefitService {
                 .exposureEndDate(savedPost.getExposureEndDate())
                 .build();
 
+    }
+
+    // 제휴 홍보 게시글 임시 저장
+    @Transactional
+    public PostDraftSaveResponse saveOrUpdateDraft(Long userId, Type type, PostDraftSaveRequest request) {
+
+        if (type != Type.BENEFIT) {
+            throw new GeneralException(ErrorStatus.INVALID_TYPE, "BENEFIT 타입의 게시물만 임시 저장할 수 있습니다.");
+        }
+
+        return postService.saveOrUpdateDraft(userId, type, request);
     }
 
     private void validate(BenefitGenerateAiRequest request) {
