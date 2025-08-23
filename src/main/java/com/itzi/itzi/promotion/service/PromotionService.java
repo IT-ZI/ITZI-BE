@@ -2,6 +2,7 @@ package com.itzi.itzi.promotion.service;
 
 import com.itzi.itzi.agreement.domain.Agreement;
 import com.itzi.itzi.agreement.repository.AgreementRepository;
+import com.itzi.itzi.auth.domain.Category;
 import com.itzi.itzi.auth.domain.User;
 import com.itzi.itzi.global.api.code.ErrorStatus;
 import com.itzi.itzi.global.exception.GeneralException;
@@ -10,13 +11,14 @@ import com.itzi.itzi.posts.domain.OrderBy;
 import com.itzi.itzi.posts.domain.Post;
 import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
+import com.itzi.itzi.posts.dto.response.PostListResponse;
 import com.itzi.itzi.posts.repository.PostRepository;
+import com.itzi.itzi.posts.service.PostService;
 import com.itzi.itzi.promotion.dto.request.PromotionDraftSaveRequest;
 import com.itzi.itzi.promotion.dto.request.PromotionManualPublishRequest;
 import com.itzi.itzi.promotion.dto.response.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -24,8 +26,8 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static org.springframework.util.StringUtils.hasText;
@@ -38,6 +40,7 @@ public class PromotionService {
     private final PostRepository postRepository;
     private final S3Service s3Service;
     private final AgreementRepository agreementRepository;
+    private final PostService postService;
 
     // 제휴 홍보 게시글을 맺을 수 있는 제휴 대상자 리스트 조회
     @Transactional(readOnly = true)
@@ -295,45 +298,16 @@ public class PromotionService {
 
     // 모든 사용자가 작성한 제휴 홍보 게시글 카드뷰 조회
     @Transactional(readOnly = true)
-    public List<PromotionListResponse> getAllPromotionList(Type type, OrderBy orderBy) {
-        Status status = Status.PUBLISHED;       // 게시된 홍보 게시글만 조회
+    public List<PostListResponse> getAllPromotionList(OrderBy orderBy, List<Category> categories) {
 
-        // 타입 검증: PROMOTION이 아니면 에러
-        if (type != Type.PROMOTION) {
-            throw new GeneralException(ErrorStatus.INVALID_TYPE, "제휴 홍보글만 조회할 수 있습니다.");
-        }
+        Status status = Status.PUBLISHED;
+        List<Type> types = List.of(Type.BENEFIT, Type.PROMOTION);
 
-        List<Post> posts = new ArrayList<>();
+        Predicate<Post> categoryFilter = (categories == null || categories.isEmpty())
+                ? null
+                : post -> post.getCategory() != null && categories.contains(post.getCategory());
 
-        // 기본 정렬 : 마감임박순
-        if (orderBy == null) {
-            orderBy = OrderBy.CLOSING;
-        }
-
-        switch (orderBy) {
-            case CLOSING -> {
-                LocalDate today = LocalDate.now();
-                posts = postRepository.findByTypeAndStatusAndExposureEndDateGreaterThanEqual(
-                        type, status, today, Sort.by(Sort.Direction.ASC, "exposureEndDate")
-                );
-            }
-
-            case POPULAR -> {
-                posts = postRepository.findByTypeAndStatus(
-                        type, status, Sort.by(Sort.Direction.DESC, "bookmarkCount"));
-            }
-
-            case LATEST -> {
-                posts = postRepository.findByTypeAndStatus(
-                        type, status, Sort.by(Sort.Direction.DESC, "publishedAt"));
-            }
-
-            case OLDEST -> {
-                posts = postRepository.findByTypeAndStatus(
-                        type, status, Sort.by(Sort.Direction.ASC, "publishedAt"));
-            }
-        }
-        return posts.stream().map(this::toListResponse).toList();
+        return postService.getAllPostList(types, status, orderBy, categoryFilter);
 
     }
 
@@ -361,8 +335,34 @@ public class PromotionService {
             throw new GeneralException(ErrorStatus.INVALID_TYPE, "해당 게시글은 제휴 홍보글이 아닙니다.");
         }
 
+        // Post 엔티티에 연결된 Agreement 엔티티 가져오기
+        Agreement agreement = post.getAgreement();
+        if (agreement == null) {
+            // 제휴 협약서가 없는 경우
+            throw new GeneralException(ErrorStatus.NOT_FOUND, "해당 게시글에 연결된 협약서가 없습니다.");
+        }
+
+        // 발신자 정보 처리
+        Object senderInfo = null;
+        if (Boolean.TRUE.equals(post.getExposeProposerInfo())) {
+            User sender = agreement.getSender();
+            if (sender != null) {
+                senderInfo = postService.buildAuthorSummary(sender);
+            }
+        }
+
+        // 수신자 정보 처리
+        Object receiverInfo = null;
+        if (Boolean.TRUE.equals(post.getExposeTargetInfo())) {
+            User receiver = agreement.getReceiver();
+            if (receiver != null) {
+                receiverInfo = postService.buildAuthorSummary(receiver);
+            }
+        }
+
         return PromotionDetailResponse.builder()
                 .userId(1L)                     // userId는 1로 고정
+                .category(post.getCategory())
                 .postId(post.getPostId())
                 .type(post.getType())
                 .status(post.getStatus())
@@ -376,6 +376,8 @@ public class PromotionService {
                 .benefit(post.getBenefit())
                 .condition(post.getCondition())
                 .content(post.getContent())
+                .sender(senderInfo)
+                .receiver(receiverInfo)
                 .build();
     }
 

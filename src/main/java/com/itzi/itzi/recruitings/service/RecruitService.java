@@ -1,12 +1,9 @@
 package com.itzi.itzi.recruitings.service;
 
-import com.itzi.itzi.auth.domain.OrgProfile;
-import com.itzi.itzi.auth.domain.OrgType;
 import com.itzi.itzi.auth.domain.User;
 import com.itzi.itzi.global.gemini.GeminiService;
 import com.itzi.itzi.posts.dto.response.*;
 import com.itzi.itzi.posts.service.PostService;
-import com.itzi.itzi.recruitings.dto.response.AuthorSummaryResponse;
 import com.itzi.itzi.auth.repository.UserRepository;
 import com.itzi.itzi.global.api.code.ErrorStatus;
 import com.itzi.itzi.global.exception.GeneralException;
@@ -19,19 +16,16 @@ import com.itzi.itzi.posts.repository.PostRepository;
 import com.itzi.itzi.recruitings.dto.request.RecruitingAiGenerateRequest;
 import com.itzi.itzi.posts.dto.request.PostDraftSaveRequest;
 import com.itzi.itzi.recruitings.dto.response.*;
-import com.itzi.itzi.store.domain.Store;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.function.Predicate;
 
 @Service
 @RequiredArgsConstructor
@@ -297,7 +291,15 @@ public class RecruitService {
     @Transactional(readOnly = true)
     public List<PostListResponse> getAllRecruitingList(OrderBy orderBy, List<String> filters) {
         Status status = Status.PUBLISHED;
+        List<Type> types = List.of(Type.RECRUITING);
 
-        return postService.getAllPostList(Type.RECRUITING, status, orderBy, filters);
+        Predicate<Post> recruitingFilter = (filters == null || filters.isEmpty())
+                ? null
+                : post -> {
+            String benefit = post.getBenefit();
+            return benefit != null && filters.stream().anyMatch(benefit::contains);
+        };
+
+        return postService.getAllPostList(types, status, orderBy, recruitingFilter);
     }
 }

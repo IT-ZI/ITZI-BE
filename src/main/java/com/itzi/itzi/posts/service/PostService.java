@@ -17,6 +17,7 @@ import com.itzi.itzi.posts.dto.request.PostDraftSaveRequest;
 import com.itzi.itzi.recruitings.dto.response.AuthorSummaryResponse;
 import com.itzi.itzi.recruitings.dto.response.StoreSummaryResponse;
 import com.itzi.itzi.store.domain.Store;
+import jakarta.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Sort;
@@ -29,6 +30,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 @Service
@@ -164,7 +166,6 @@ public class PostService {
         User author = post.getUser();
         Object authorSummary = buildAuthorSummary(author);
 
-        // NOTE: 이 응답 DTO는 모든 게시글 타입에 대한 공통 DTO여야 합니다.
         return PostDetailResponse.builder()
                 .userId(author.getUserId())
                 .postId(post.getPostId())
@@ -199,7 +200,7 @@ public class PostService {
 
     // 공통: 모든 사용자가 작성한 게시글 조회
     @Transactional(readOnly = true)
-    public List<PostListResponse> getAllPostList(Type type, Status status, OrderBy orderBy, List<String> filters) {
+    public List<PostListResponse> getAllPostList(List<Type> types, Status status, OrderBy orderBy, @Nullable Predicate<Post> filter) {
 
         List<Post> posts = new ArrayList<>();
 
@@ -211,38 +212,37 @@ public class PostService {
         switch (orderBy) {
             case CLOSING -> {
                 LocalDate today = LocalDate.now();
-                posts = postRepository.findByTypeAndStatusAndExposureEndDateGreaterThanEqual(
-                        type, status, today, Sort.by(Sort.Direction.ASC, "exposureEndDate")
+                posts = postRepository.findByTypeInAndStatusAndExposureEndDateGreaterThanEqual(
+                        types, status, today, Sort.by(Sort.Direction.ASC, "exposureEndDate")
                 );
             }
 
             case POPULAR -> {
-                posts = postRepository.findByTypeAndStatus(
-                        type, status, Sort.by(Sort.Direction.DESC, "bookmarkCount"));
+                posts = postRepository.findByTypeInAndStatus(
+                        types, status, Sort.by(Sort.Direction.DESC, "bookmarkCount"));
             }
 
             case LATEST -> {
-                posts = postRepository.findByTypeAndStatus(
-                        type, status, Sort.by(Sort.Direction.DESC, "publishedAt"));
+                posts = postRepository.findByTypeInAndStatus(
+                        types, status, Sort.by(Sort.Direction.DESC, "publishedAt"));
             }
 
             case OLDEST -> {
-                posts = postRepository.findByTypeAndStatus(
-                        type, status, Sort.by(Sort.Direction.ASC, "publishedAt"));
+                posts = postRepository.findByTypeInAndStatus(
+                        types, status, Sort.by(Sort.Direction.ASC, "publishedAt"));
             }
         }
 
         // 필터링 (기본값: 전체 조회)
-        if (filters != null && !filters.isEmpty()) {
-            posts = posts.stream()
-                    .filter(post -> filters.stream().anyMatch(filter -> post.getBenefit().contains(filter)))
-                    .collect(Collectors.toList());
+        if (filter != null) {
+            posts = posts.stream().filter(filter).toList();
         }
+
         return posts.stream().map(this::toListResponse).toList();
     }
 
-    // 작성자 정보 요약 생성 (OrgProfile, Store 등은 User 엔티티 내에 포함되어 있다고 가정)
-    private Object buildAuthorSummary(User author) {
+    // 작성자 정보 요약 생성
+    public Object buildAuthorSummary(User author) {
         if (author.getOrgProfile() != null && author.getOrgProfile().getOrgType() == OrgType.STORE) {
             return buildStoreSummary(author.getStore());
         } else {
@@ -295,7 +295,7 @@ public class PostService {
     }
 
     // 이미지 업로드/변경
-    private void handleImageUpload(Post entity, MultipartFile file) {
+    public void handleImageUpload(Post entity, MultipartFile file) {
         if (file == null || file.isEmpty()) return;
 
         try {
@@ -315,6 +315,7 @@ public class PostService {
         return PostListResponse.builder()
                 .postId(post.getPostId())
                 .userId(post.getUser().getUserId())
+                .category(post.getCategory())
                 .type(post.getType())
                 .status(post.getStatus())
                 .exposureEndDate(post.getExposureEndDate())
@@ -334,6 +335,7 @@ public class PostService {
     // 일반 작성자/조직의 요약 정보 생성
     private AuthorSummaryResponse buildAuthorSummary(User author, OrgProfile org) {
         return AuthorSummaryResponse.builder()
+                .userId(author.getUserId())
                 .image(author.getProfileImage())
                 .rating(author.getOrgProfile().getRating())
                 .name(author.getProfileName())
@@ -351,12 +353,13 @@ public class PostService {
     // 상점의 요약 정보 생성
     private StoreSummaryResponse buildStoreSummary(Store store) {
         return StoreSummaryResponse.builder()
+                .userId(store.getUser().getUserId())
                 .image(store.getStoreImage())
                 .rating(store.getRating())
                 .name(store.getName())
                 .info(store.getInfo())
                 .keywords(store.getKeywords())
-                .category(store.getCategory().name())
+                .category(store.getCategory().getDescription())
                 .operatingHours(store.getOperatingHours())
                 .phone(store.getPhone())
                 .address(store.getAddress())

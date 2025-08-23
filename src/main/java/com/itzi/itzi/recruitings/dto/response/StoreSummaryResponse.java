@@ -13,6 +13,8 @@ import java.util.Set;
 @AllArgsConstructor
 public class StoreSummaryResponse {
 
+    private Long userId;
+
     private String image;
     private Integer rating;
     private String name;
@@ -25,6 +27,5 @@ public class StoreSummaryResponse {
     private String address;
     private String ownerName;
     private String linkUrl;
-
 
 }

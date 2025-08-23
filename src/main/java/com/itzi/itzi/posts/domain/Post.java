@@ -1,6 +1,7 @@
 package com.itzi.itzi.posts.domain;
 
 import com.itzi.itzi.agreement.domain.Agreement;
+import com.itzi.itzi.auth.domain.Category;
 import com.itzi.itzi.auth.domain.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -104,5 +105,9 @@ public class Post {
     @ManyToOne
     @JoinColumn(name = "receiver_id")
     private User receiver;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "category")
+    private Category category;
 
 }
