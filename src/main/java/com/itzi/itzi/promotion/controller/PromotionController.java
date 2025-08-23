@@ -4,6 +4,7 @@ import com.itzi.itzi.global.api.code.SuccessStatus;
 import com.itzi.itzi.global.api.dto.ApiResponse;
 import com.itzi.itzi.posts.domain.OrderBy;
 import com.itzi.itzi.posts.domain.Type;
+import com.itzi.itzi.posts.dto.response.PostListResponse;
 import com.itzi.itzi.promotion.dto.request.PromotionDraftSaveRequest;
 import com.itzi.itzi.promotion.dto.request.PromotionManualPublishRequest;
 import com.itzi.itzi.promotion.dto.response.*;
@@ -92,11 +93,11 @@ public class PromotionController {
 
     // 모든 사용자가 작성한 제휴 홍보 게시글 목록 조회
     @GetMapping("/all")
-    public ApiResponse<List<PromotionListResponse>> getAllPromotionList(
-            @RequestParam Type type,
-            @RequestParam(defaultValue = "CLOSING") OrderBy orderBy
+    public ApiResponse<List<PostListResponse>> getAllPromotionList(
+            @RequestParam(defaultValue = "CLOSING") OrderBy orderBy,
+            @RequestParam(required = false) List<String> filters
     ) {
-        List<PromotionListResponse> response = promotionService.getAllPromotionList(type, orderBy);
+        List<PostListResponse> response = promotionService.getAllPromotionList(orderBy, filters);
         return ApiResponse.of(SuccessStatus._OK, response);
 
     }
