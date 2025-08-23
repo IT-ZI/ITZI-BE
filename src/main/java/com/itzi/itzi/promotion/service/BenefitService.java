@@ -9,12 +9,18 @@ import com.itzi.itzi.global.s3.S3Service;
 import com.itzi.itzi.posts.domain.Post;
 import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
+import com.itzi.itzi.posts.dto.request.PostDraftSaveRequest;
+import com.itzi.itzi.posts.dto.response.PostDeleteResponse;
+import com.itzi.itzi.posts.dto.response.PostDraftSaveResponse;
+import com.itzi.itzi.posts.dto.response.PostPublishResponse;
 import com.itzi.itzi.posts.repository.PostRepository;
+import com.itzi.itzi.posts.service.PostService;
 import com.itzi.itzi.promotion.dto.request.BenefitGenerateAiRequest;
 import com.itzi.itzi.promotion.dto.response.BenefitGenerateAiResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -29,6 +35,7 @@ public class BenefitService {
     private final S3Service s3Service;
     private final GeminiService geminiService;
     private final UserRepository userRepository;
+    private final PostService postService;
 
     // 혜택 홍보 게시글 상세 정보 AI 반환
     public BenefitGenerateAiResponse generateBenefitAi(Long userId, Type type, BenefitGenerateAiRequest request) {
@@ -83,6 +90,49 @@ public class BenefitService {
                 .exposureEndDate(savedPost.getExposureEndDate())
                 .build();
 
+    }
+
+    // 제휴 홍보 게시글 임시 저장
+    @Transactional
+    public PostDraftSaveResponse saveOrUpdateDraft(Long userId, Type type, PostDraftSaveRequest request) {
+
+        if (type != Type.BENEFIT) {
+            throw new GeneralException(ErrorStatus.INVALID_TYPE, "BENEFIT 타입의 게시물만 임시 저장할 수 있습니다.");
+        }
+
+        return postService.saveOrUpdateDraft(userId, type, request);
+    }
+
+    // 제휴 홍보 게시글 업로드
+    @Transactional
+    public PostPublishResponse publishBenefit(Long postId) {
+
+        // 1. 존재하는 게시글인지 확인
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
+
+        // 2. 게시글 타입 검증: BENEFIT 타입만 업로드 가능하도록
+        if (post.getType() != Type.BENEFIT) {
+            throw new GeneralException(ErrorStatus.INVALID_TYPE, "BENEFIT 타입의 게시물만 업로드할 수 있습니다.");
+        }
+
+        return postService.pusblishPost(postId);
+    }
+
+    // 제휴 홍보 게시글 삭제하기
+    @Transactional
+    public PostDeleteResponse deleteBenefit(Long postId) {
+
+        // 1. 게시글 존재 여부 확인
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
+
+        // 2. 게시글 타입 검증 : BENEFIT 타입만 삭제 가능
+        if (post.getType() != Type.BENEFIT) {
+            throw new GeneralException(ErrorStatus.INVALID_TYPE, "BENEFIT 타입의 게시물만 삭제할 수 있습니다.");
+        }
+
+        return postService.deletePost(postId);
     }
 
     private void validate(BenefitGenerateAiRequest request) {
