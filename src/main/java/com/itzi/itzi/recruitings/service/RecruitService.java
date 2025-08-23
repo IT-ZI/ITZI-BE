@@ -1,10 +1,9 @@
 package com.itzi.itzi.recruitings.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itzi.itzi.auth.domain.OrgProfile;
 import com.itzi.itzi.auth.domain.OrgType;
 import com.itzi.itzi.auth.domain.User;
+import com.itzi.itzi.global.gemini.GeminiService;
 import com.itzi.itzi.recruitings.dto.response.AuthorSummaryResponse;
 import com.itzi.itzi.auth.repository.UserRepository;
 import com.itzi.itzi.global.api.code.ErrorStatus;
@@ -21,24 +20,16 @@ import com.itzi.itzi.recruitings.dto.response.*;
 import com.itzi.itzi.store.domain.Store;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -49,13 +40,7 @@ public class RecruitService {
     private final PostRepository postRepository;
     private final UserRepository userRepository;
     private final S3Service s3Service;
-
-    @Value("${gemini.api.key}")
-    private String apiKey;
-
-    private String GEMINI_ENDPOINT =
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
-
+    private final GeminiService geminiService;
 
     public RecruitingAiGenerateResponse generateRecruitingAi(Long userId, Type type, RecruitingAiGenerateRequest request) {
 
@@ -65,15 +50,13 @@ public class RecruitService {
         // 2. 프롬프트 구성
         String prompt = buildPrompt(type, request);
 
-        // 3. Gemini 호출
-        String endpoint = GEMINI_ENDPOINT + "?key=" + apiKey;
-        String content = callGemini(endpoint, prompt);
+        // 3. Gemini 호출 (GeminiService 사용)
+        String content = geminiService.callGemini(prompt);
 
-        // 2. Fetch the User entity using the userId
+        // 4. 엔티티 구성
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 사용자를 찾을 수 없습니다: " + userId));
 
-        // 4. 이미지를 제외한 엔티티 구성
         Post entity = Post.builder()
                         .user(user)
                         .type(Type.RECRUITING)
@@ -148,12 +131,12 @@ public class RecruitService {
 
         // MultipartFile 기준으로 존재 여부만 판단
         String postImageLine = (r.getPostImage() != null && !r.getPostImage().isEmpty())
-                ? "\n(이미지 첨부됨)"   // 필요 없다면 "" 로 완전 제거해도 됨
+                ? "\n(이미지 첨부됨)"
                 : "";
 
         // 제목, 타깃에서 학교명 자동 추출
-        String school = extractSchoolName(r.getTitle())
-                .or(() -> extractSchoolName(r.getTarget()))
+        String school = geminiService.extractSchoolName(r.getTitle())
+                .or(() -> geminiService.extractSchoolName(r.getTarget()))
                 .orElse("00대학교");       // 기본값
 
         // 대상, 기간, 혜택, 조건 협의 가능 문구
@@ -164,11 +147,12 @@ public class RecruitService {
         String periodCondNote = (targetOk || periodOk || benefitOk || condOk ) ? " (대상, 기간, 혜택, 조건 협의 가능)" : "";
 
         return """
-        너는 아래 '샘플 출력 양식'과 **완전히 동일한 레이아웃**으로 본문을 작성한다.
+        너는 아래 '원본 텍스트'를 참고하여, 명시된 규칙에 따라 빈칸을 채우거나 일부 문구를 수정하여 최종 본문만 출력한다.
         - 이모지 사용 규칙
             1) 이모지 리스트 `[☺️😊😚🙌🏻🤝🏻🤙🏻🙏🏻🍀⭐️💌📍❗️️💬📢🕒]`에서 **3개를 무작위로 선택**
             2) **1문단과 2문단 본문 내용에서만** 적절히 배치
-            3) 📅 제휴 기간, 🎯 제휴 대상, 💬 문의 안내 **섹션과 해당 섹션의 본문에는 이모지 사용 금지**
+            3) 이모지는 문장 중간에 삽입 금지
+            4) 📅 제휴 기간, 🎯 제휴 대상, 💬 문의 안내 **섹션과 해당 섹션의 본문에는 이모지 사용 금지**
         - 불필요한 접두/접미 문장, 설명, 따옴표, 코드블록 금지
         - 300~500자 내외, 문단은 샘플처럼 2개 본문 + 3개 섹션으로 구성
         - 아래 값으로 빈칸을 치환하여 최종 본문만 출력
@@ -182,11 +166,11 @@ public class RecruitService {
         - 타입: %s
         - 협의표시: %s
 
-        [샘플 출력 양식]
+        [원본 텍스트]
         [%s]
 
-        안녕하십니까, %s 총학생회입니다.%s
-        저희 총학생회는 %s 동안, %s분들께 혜택을 제공해 주실 상권 제휴 매장을 모집하고 있습니다.
+        안녕하십니까, %s입니다.
+        저희는 %s 동안, %s분들께 혜택을 제공해 주실 상권 제휴 매장을 모집하고 있습니다.
 
         이번 제휴는 지역 상권과 학교 구성원 간의 상생과 교류를 목적으로 하며,
         제휴를 맺어주시는 매장에는 적극적인 홍보를 통해 방문 유도와 인지도 향상을 도와드릴 예정입니다.
@@ -194,7 +178,7 @@ public class RecruitService {
         할인, 쿠폰 제공, 사은품 증정, 시즌 이벤트 등 다양한 방식으로 협의가 가능합니다.
 
         📅 제휴 기간
-        %s ~ %s%s
+        %s ~ %s
 
         🎯 제휴 대상
         %s
@@ -223,86 +207,6 @@ public class RecruitService {
                 r.getTarget().trim(),
                 postImageLine
         );
-    }
-
-    private String callGemini(String endpoint, String prompt) {
-        try {
-            if (!hasText(apiKey)) {
-                throw new GeneralException(ErrorStatus.GEMINI_API_KEY_MISSING);
-            }
-
-            ObjectMapper om = new ObjectMapper();
-
-            String body = "{"
-                    + "\"contents\":[{"
-                    + "  \"parts\":[{"
-                    + "    \"text\":" + om.writeValueAsString(prompt)
-                    + "  }]"
-                    + "}]"
-                    + "}";
-
-            HttpRequest req = HttpRequest.newBuilder()
-                    .uri(URI.create(endpoint))
-                    .header("Content-Type", "application/json; charset=UTF-8")
-                    .POST(HttpRequest.BodyPublishers.ofString(body))
-                    .build();
-
-            HttpClient client = HttpClient.newHttpClient();
-            HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
-
-            // HTTP 레벨 에러 : GEMINI_HTTP_ERROR
-            if (resp.statusCode() < 200 || resp.statusCode() >= 300) {
-                throw new GeneralException(ErrorStatus.GEMINI_HTTP_ERROR,
-                        "status=" + resp.statusCode() + ", body=" + resp.body());
-            }
-
-            JsonNode root = om.readTree(resp.body());
-
-            // 안전성 차단
-            JsonNode feedback = root.path("promptFeedback");
-            if (!feedback.isMissingNode()) {
-                String blockReason = feedback.path("blockReason").asText("");
-                if (hasText(blockReason)) {
-                    throw new GeneralException(ErrorStatus.GEMINI_BLOCKED,
-                            blockReason + " / " + resp.body());
-                }
-            }
-
-            // candidates/parts 포맷 검증 : GEMINI_INVALID_RESPONSE
-            JsonNode candidates = root.path("candidates");
-            if (!candidates.isArray() || candidates.isEmpty()) {
-                throw new GeneralException(ErrorStatus.GEMINI_INVALID_RESPONSE,
-                        "AI 응답에 canditdates 누락: " + resp.body());
-            }
-
-            JsonNode parts = candidates.get(0).path("content").path("parts");
-            if (!parts.isArray() || parts.isEmpty()) {
-                throw new RuntimeException("AI 응답에 parts 누락: " + resp.body());
-            }
-
-            // 빈 텍스트를 반환했을 경우
-            String text = parts.get(0).path("text").asText();
-            if (!hasText(text)) {
-                throw new GeneralException(ErrorStatus.GEMINI_EMPTY_TEXT, "body=" + resp.body());
-            }
-            return text.trim();
-
-        } catch (Exception e) {
-            throw new GeneralException(ErrorStatus.INTERNAL_ERROR, e.getMessage());
-
-        }
-    }
-
-    // 학교명 추출
-    private Optional<String> extractSchoolName(String text) {
-        if ( text == null || text.isBlank()) return Optional.empty();
-
-        Pattern p = Pattern.compile("[가-힣A-Za-z]{2,20}대학교");
-        Matcher m = p.matcher(text);
-        if (m.find()) {
-            return Optional.of(m.group(1));
-        }
-        return Optional.empty();
     }
 
     @Transactional
