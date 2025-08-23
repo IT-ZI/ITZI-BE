@@ -1,4 +1,4 @@
-package com.itzi.itzi.recruitings.dto.response;
+package com.itzi.itzi.posts.dto.response;
 
 import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
@@ -13,9 +13,9 @@ import java.time.LocalDateTime;
 @Setter
 @Builder
 @AllArgsConstructor
-public class RecruitingDraftSaveResponse {
+public class PostDraftSaveResponse {
 
-    private Type type;              // RECRUITING으로 고정
+    private Type type;
     private Long postId;
     private Long userId;
     private Status status;
