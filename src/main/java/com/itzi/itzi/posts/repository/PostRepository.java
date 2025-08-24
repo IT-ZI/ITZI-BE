@@ -1,8 +1,11 @@
 package com.itzi.itzi.posts.repository;
 
+import com.itzi.itzi.auth.domain.OrgType;
 import com.itzi.itzi.posts.domain.Post;
 import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -35,6 +38,10 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     List<Post> findByTypeInAndStatusAndExposureEndDateGreaterThanEqual(
             List<Type> types, Status status, LocalDate today, Sort sort
     );
+
+    // OrgProfile의 OrgType에 따라 게시글을 필터링하여 페이징 조회
+    @Query("select p from Post p join p.user u join u.orgProfile o where o.orgType = :orgType")
+    Page<Post> findByUser_OrgProfile_OrgType(@Param("orgType") OrgType orgType, Pageable pageable);
 
 
     /*
