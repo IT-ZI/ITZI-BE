@@ -18,7 +18,7 @@ public class PromotionDetailResponse {
     private Long userId;
 
     private LocalDate exposureEndDate;
-    private Category category;
+    private String category;
     private Long bookmarkCount;
 
     private Type type;
