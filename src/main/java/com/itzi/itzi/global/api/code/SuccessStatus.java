@@ -14,6 +14,7 @@ public enum SuccessStatus implements BaseCode {
 
     // Partnership (제휴 요청)
     PARTNERSHIP_POST(HttpStatus.OK, "POSTINQUIRY200", "문의 글이 중간 저장되었습니다."),
+    PARTNERSHIP_UPDATED(HttpStatus.OK, "POSTINQUIRY201", "문의 글이 성공적으로 수정되었습니다."),  // ✅ 추가
     PARTNERSHIP_SENT(HttpStatus.OK, "INQUIRY200", "문의가 성공적으로 전송되었습니다."),
     PARTNERSHIP_ACCEPTED(HttpStatus.OK, "INQUIRY201", "제휴 요청이 수락되었습니다."),
     PARTNERSHIP_DECLINED(HttpStatus.OK, "INQUIRY202", "제휴 요청이 거절되었습니다."),
@@ -42,4 +43,3 @@ public enum SuccessStatus implements BaseCode {
                 .build();
     }
 }
-
