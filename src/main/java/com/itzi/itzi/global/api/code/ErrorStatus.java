@@ -18,6 +18,8 @@ public enum ErrorStatus implements BaseErrorCode {
 
     NOT_FOUND(HttpStatus.NOT_FOUND, "E-404", "대상을 찾을 수 없습니다."),
     PARTNERSHIP_NOT_FOUND(HttpStatus.NOT_FOUND, "E-404-01", "해당 제휴 요청을 찾을 수 없습니다."),
+    AGREEMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "E-404-02", "해당 제휴 협약서를 찾을 수 없습니다."),
+
 
     ALREADY_PUBLISHED(HttpStatus.CONFLICT, "E-409-01", "이미 게시된 글입니다."),
     CANNOT_DELETE_POST(HttpStatus.CONFLICT, "E-409-02", "해당 상태의 글은 삭제할 수 없습니다."),
