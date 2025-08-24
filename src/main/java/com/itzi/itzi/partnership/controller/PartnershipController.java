@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/partnership")
+@RequestMapping("/partnership")  // 클래스 prefix
 @RequiredArgsConstructor
 @Slf4j
 public class PartnershipController {
@@ -80,4 +80,14 @@ public class PartnershipController {
         partnershipService.deleteDeclinedInquiry(partnershipId);
         return ResponseEntity.ok(ApiResponse.of(SuccessStatus.PARTNERSHIP_DELETED, null));
     }
+
+    /** 8. 제휴 문의글 단건 조회 (미리보기) */
+    @GetMapping("/{partnershipId}")
+    public ResponseEntity<ApiResponse<PartnershipPostResponseDTO>> getPartnershipDetail(
+            @PathVariable Long partnershipId
+    ) {
+        PartnershipPostResponseDTO dto = partnershipService.getPartnershipDetail(partnershipId);
+        return ResponseEntity.ok(ApiResponse.of(SuccessStatus._OK, dto));
+    }
 }
+
