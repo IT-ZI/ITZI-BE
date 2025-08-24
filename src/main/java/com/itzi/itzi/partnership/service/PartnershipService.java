@@ -20,11 +20,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.HashSet;
 import java.util.List;
 
 @Service
@@ -48,6 +50,18 @@ public class PartnershipService {
     public PartnershipPostResponseDTO postInquiry(
             Long userId, Long receiverId, PartnershipPostRequestDTO dto
     ) {
+        // ✅ 키워드 유효성 검증
+        if (dto.getKeywords() != null) {
+            if (dto.getKeywords().size() > 5) {
+                throw new GeneralException(ErrorStatus.INVALID_KEYWORD, "키워드는 최대 5개까지만 입력 가능합니다.");
+            }
+            for (String keyword : dto.getKeywords()) {
+                if (keyword.length() > 10) {
+                    throw new GeneralException(ErrorStatus.INVALID_KEYWORD, "키워드는 10자 이내여야 합니다: " + keyword);
+                }
+            }
+        }
+
         User sender = userRepository.findById(userId)
                 .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
         User receiver = userRepository.findById(receiverId)
@@ -73,19 +87,18 @@ public class PartnershipService {
         Partnership partnership = Partnership.builder()
                 .sender(sender)
                 .receiver(receiver)
-                .post(post)  // ✅ 반드시 연결
+                .post(post)
                 .purpose(dto.getPurpose())
                 .periodType(dto.getPeriodType())
                 .periodValue(dto.getPeriodValue())
                 .orgType(dto.getOrgType())
                 .orgValue(dto.getOrgValue())
                 .detail(dto.getDetail())
-                .keywords(dto.getKeywords())
+                .keywords(dto.getKeywords() != null ? new HashSet<>(dto.getKeywords()) : new HashSet<>()) // ✅ 변환
                 .content(aiContent)
-                .sendStatus(SendStatus.DRAFT)        // 초안
-                .acceptedStatus(AcceptedStatus.WAITING) // 대기
+                .sendStatus(SendStatus.DRAFT)
+                .acceptedStatus(AcceptedStatus.WAITING)
                 .build();
-
         Partnership saved = partnershipRepository.save(partnership);
         return PartnershipPostResponseDTO.fromEntity(saved);
     }
@@ -143,6 +156,12 @@ public class PartnershipService {
             throw new GeneralException(ErrorStatus.INVALID_STATUS, "아직 전송되지 않은 문의입니다.");
         }
 
+        // ✅ 이미 수락/거절된 건 막기
+        if (partnership.getAcceptedStatus() == AcceptedStatus.ACCEPTED
+                || partnership.getAcceptedStatus() == AcceptedStatus.DECLINED) {
+            throw new GeneralException(ErrorStatus.ALREADY_PROCESSED, "이미 처리된 문의입니다.");
+        }
+
         partnership.setAcceptedStatus(AcceptedStatus.ACCEPTED);
         Partnership updated = partnershipRepository.save(partnership);
         return PartnershipPatchResponseDTO.fromEntity(updated);
@@ -157,6 +176,12 @@ public class PartnershipService {
 
         if (partnership.getSendStatus() != SendStatus.SEND) {
             throw new GeneralException(ErrorStatus.INVALID_STATUS, "아직 전송되지 않은 문의입니다.");
+        }
+
+        // ✅ 이미 수락/거절된 건 막기
+        if (partnership.getAcceptedStatus() == AcceptedStatus.ACCEPTED
+                || partnership.getAcceptedStatus() == AcceptedStatus.DECLINED) {
+            throw new GeneralException(ErrorStatus.ALREADY_PROCESSED, "이미 처리된 문의입니다.");
         }
 
         partnership.setAcceptedStatus(AcceptedStatus.DECLINED);
@@ -176,6 +201,13 @@ public class PartnershipService {
         }
 
         partnershipRepository.delete(partnership);
+    }
+
+    @Transactional(readOnly = true)
+    public PartnershipPostResponseDTO getPartnershipDetail(Long partnershipId) {
+        Partnership p = partnershipRepository.findById(partnershipId)
+                .orElseThrow(() -> new IllegalArgumentException("문의글 없음"));
+        return PartnershipPostResponseDTO.fromEntity(p);
     }
 
     /**
