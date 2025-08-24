@@ -97,7 +97,7 @@ public class Post {
     private Boolean exposeProposerInfo;
     private Boolean exposeTargetInfo;
 
-    @OneToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "agreement_id")
     private Agreement agreement;
 
