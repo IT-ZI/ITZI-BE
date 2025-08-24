@@ -87,22 +87,15 @@ public class RecruitingController {
         return ApiResponse.of(SuccessStatus._OK, response);
     }
 
-    // 모든 사용자가 작성한 제휴 모집글 조회
-    @GetMapping("/all")
-    public ApiResponse<List<PostListResponse>> getAllRecruitingList(
-            @RequestParam(defaultValue = "CLOSING") OrderBy orderBy,
-            @RequestParam(required = false) List<String> filters
-    ) {
-        List<PostListResponse> responses = recruitService.getAllRecruitingList(orderBy, filters);
-        return ApiResponse.of(SuccessStatus._OK, responses);
-    }
-
+    // 모든 사용자가 작성한 게시글 리스트 조회
     @GetMapping()
-    public ApiResponse<Page<PostListResponse>> getPosts(
+    public ApiResponse<Page<PostListResponse>> getRecruitingUnified(
+            @RequestParam(defaultValue = "CLOSING") OrderBy orderBy,
+            @RequestParam(required = false) List<String> filters,
             @RequestParam(required = false, defaultValue = "전체") String orgType,
             @PageableDefault(size = 12, page = 0) Pageable pageable
     ) {
-        Page<PostListResponse> posts = recruitService.getPostsByOrgType(orgType, pageable);
-        return ApiResponse.of(SuccessStatus._OK, posts);
+        Page<PostListResponse> page = recruitService.getRecruiting(orderBy, filters, orgType, pageable);
+        return ApiResponse.of(SuccessStatus._OK, page);
     }
 }
