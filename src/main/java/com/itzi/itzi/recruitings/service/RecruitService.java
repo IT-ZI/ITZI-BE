@@ -17,10 +17,15 @@ import com.itzi.itzi.posts.repository.PostRepository;
 import com.itzi.itzi.recruitings.dto.request.RecruitingAiGenerateRequest;
 import com.itzi.itzi.posts.dto.request.PostDraftSaveRequest;
 import com.itzi.itzi.recruitings.dto.response.*;
+import jakarta.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,7 +33,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.function.Predicate;
 
 @Service
 @RequiredArgsConstructor
@@ -290,45 +294,94 @@ public class RecruitService {
 
     }
 
-    // 모든 사용자가 작성한 제휴 모집글 조회
     @Transactional(readOnly = true)
-    public List<PostListResponse> getAllRecruitingList(OrderBy orderBy, List<String> filters) {
-        Status status = Status.PUBLISHED;
-        List<Type> types = List.of(Type.RECRUITING);
+    public Page<PostListResponse> getRecruiting(
+            @Nullable OrderBy orderBy,
+            @Nullable List<String> filters,
+            @Nullable String orgType,
+            Pageable pageable
+    ) {
+        Specification<Post> spec = Specification.allOf(
+                typeIs(Type.RECRUITING),
+                statusIs(Status.PUBLISHED),
+                orgTypeEquals(orgType),
+                benefitContainsAny(filters)
+        );
 
-        Predicate<Post> recruitingFilter = (filters == null || filters.isEmpty())
-                ? null
-                : post -> {
-            String benefit = post.getBenefit();
-            return benefit != null && filters.stream().anyMatch(benefit::contains);
-        };
+        // 정렬
+        Sort sort = toSort(orderBy);
+        Pageable sorted = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
 
-        return postService.getAllPostList(types, status, orderBy, recruitingFilter);
+        // 조회 + 매핑
+        Page<Post> page = postRepository.findAll(spec, sorted);
+        return page.map(this::toListResponse);
     }
 
-    // org_type 값에 따라 게시글 필터링
-    @Transactional(readOnly = true)
-    public Page<PostListResponse> getPostsByOrgType(String orgType, Pageable pageable) {
-        Page<Post> posts;
+    // type = RECRUITING
+    private Specification<Post> typeIs(Type type) {
+        return (root, query, cb) -> cb.equal(root.get("type"), type);
+    }
 
-        if ("전체".equalsIgnoreCase(orgType)) {
-            posts = postRepository.findAll(pageable);
-        } else {
-            // orgType 매핑 처리
-            OrgType type;
-            try {
-                type = OrgType.valueOf(orgType.toUpperCase());
-            } catch (IllegalArgumentException e) {
-                return Page.empty(pageable); // 잘못된 값이면 빈 페이지 반환
-            }
-            posts = postRepository.findByUser_OrgProfile_OrgType(type, pageable);
+    // status = PUBLISHED
+    private Specification<Post> statusIs(Status status) {
+        return (root, query, cb) -> cb.equal(root.get("status"), status);
+    }
+
+    // orgType 파라미터: null/빈값/"전체" → 조건 생략
+    private Specification<Post> orgTypeEquals(@Nullable String orgTypeParam) {
+        if (orgTypeParam == null || orgTypeParam.isBlank() || "전체".equalsIgnoreCase(orgTypeParam)) {
+            return null; // allOf가 무시
+        }
+        OrgType orgType;
+        try {
+            orgType = OrgType.valueOf(orgTypeParam.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return null; // 잘못된 값은 조건 생략
         }
 
-        // Post → PostListResponse 매핑
-        return posts.map(post -> PostListResponse.builder()
+        return (root, query, cb) -> {
+            var user = root.join("user");
+            var org  = user.join("orgProfile");
+            return cb.equal(org.get("orgType"), orgType);
+        };
+    }
+
+    private Specification<Post> benefitContainsAny(@Nullable List<String> filters) {
+        if (filters == null || filters.isEmpty()) return null;
+
+        var cleaned = filters.stream()
+                .filter(s -> s != null && !s.isBlank())
+                .toList();
+        if (cleaned.isEmpty()) return null;
+
+        return (root, query, cb) -> {
+            var benefitPath = root.get("benefit").as(String.class);
+
+            Predicate[] likes = cleaned.stream()
+                    .map(s -> cb.like(benefitPath, "%" + s + "%"))
+                    .toArray(Predicate[]::new);
+
+            return cb.or(likes);
+        };
+    }
+
+    /** 정렬 규칙 */
+    private Sort toSort(@Nullable OrderBy orderBy) {
+        if (orderBy == null) orderBy = OrderBy.CLOSING;
+        return switch (orderBy) {
+            case CLOSING -> Sort.by(Sort.Direction.ASC, "endDate");           // 마감 임박순
+            case LATEST  -> Sort.by(Sort.Direction.DESC, "publishedAt");      // 최신순
+            case OLDEST  -> Sort.by(Sort.Direction.ASC, "publishedAt");       // 오래된순
+            case POPULAR -> Sort.by(Sort.Direction.DESC, "bookmarkCount");    // 인기순
+            default      -> Sort.by(Sort.Direction.DESC, "publishedAt");
+        };
+    }
+
+    private PostListResponse toListResponse(Post post) {
+        return PostListResponse.builder()
                 .postId(post.getPostId())
                 .userId(post.getUser().getUserId())
-                .category(post.getCategory())
+                .category(post.getUser().getInterest().getDescription())
                 .type(post.getType())
                 .status(post.getStatus())
                 .exposureEndDate(post.getExposureEndDate())
@@ -342,6 +395,6 @@ public class RecruitService {
                 .targetNegotiable(post.isTargetNegotiable())
                 .periodNegotiable(post.isPeriodNegotiable())
                 .benefitNegotiable(post.isBenefitNegotiable())
-                .build());
+                .build();
     }
 }
