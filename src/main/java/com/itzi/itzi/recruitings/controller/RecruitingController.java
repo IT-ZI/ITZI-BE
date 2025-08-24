@@ -11,6 +11,9 @@ import com.itzi.itzi.recruitings.dto.response.*;
 import com.itzi.itzi.recruitings.service.RecruitService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -92,5 +95,14 @@ public class RecruitingController {
     ) {
         List<PostListResponse> responses = recruitService.getAllRecruitingList(orderBy, filters);
         return ApiResponse.of(SuccessStatus._OK, responses);
+    }
+
+    @GetMapping()
+    public ApiResponse<Page<PostListResponse>> getPosts(
+            @RequestParam(required = false, defaultValue = "전체") String orgType,
+            @PageableDefault(size = 12, page = 0) Pageable pageable
+    ) {
+        Page<PostListResponse> posts = recruitService.getPostsByOrgType(orgType, pageable);
+        return ApiResponse.of(SuccessStatus._OK, posts);
     }
 }

@@ -1,5 +1,6 @@
 package com.itzi.itzi.recruitings.service;
 
+import com.itzi.itzi.auth.domain.OrgType;
 import com.itzi.itzi.auth.domain.User;
 import com.itzi.itzi.global.gemini.GeminiService;
 import com.itzi.itzi.posts.dto.response.*;
@@ -18,6 +19,8 @@ import com.itzi.itzi.posts.dto.request.PostDraftSaveRequest;
 import com.itzi.itzi.recruitings.dto.response.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -301,5 +304,44 @@ public class RecruitService {
         };
 
         return postService.getAllPostList(types, status, orderBy, recruitingFilter);
+    }
+
+    // org_type 값에 따라 게시글 필터링
+    @Transactional(readOnly = true)
+    public Page<PostListResponse> getPostsByOrgType(String orgType, Pageable pageable) {
+        Page<Post> posts;
+
+        if ("전체".equalsIgnoreCase(orgType)) {
+            posts = postRepository.findAll(pageable);
+        } else {
+            // orgType 매핑 처리
+            OrgType type;
+            try {
+                type = OrgType.valueOf(orgType.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                return Page.empty(pageable); // 잘못된 값이면 빈 페이지 반환
+            }
+            posts = postRepository.findByUser_OrgProfile_OrgType(type, pageable);
+        }
+
+        // Post → PostListResponse 매핑
+        return posts.map(post -> PostListResponse.builder()
+                .postId(post.getPostId())
+                .userId(post.getUser().getUserId())
+                .category(post.getCategory())
+                .type(post.getType())
+                .status(post.getStatus())
+                .exposureEndDate(post.getExposureEndDate())
+                .bookmarkCount(post.getBookmarkCount())
+                .postImageUrl(post.getPostImage())
+                .title(post.getTitle())
+                .target(post.getTarget())
+                .startDate(post.getStartDate())
+                .endDate(post.getEndDate())
+                .benefit(post.getBenefit())
+                .targetNegotiable(post.isTargetNegotiable())
+                .periodNegotiable(post.isPeriodNegotiable())
+                .benefitNegotiable(post.isBenefitNegotiable())
+                .build());
     }
 }
