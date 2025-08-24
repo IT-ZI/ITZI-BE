@@ -315,7 +315,7 @@ public class PostService {
         return PostListResponse.builder()
                 .postId(post.getPostId())
                 .userId(post.getUser().getUserId())
-                .category(post.getCategory())
+                .category(post.getUser().getInterest().getDescription())
                 .type(post.getType())
                 .status(post.getStatus())
                 .exposureEndDate(post.getExposureEndDate())

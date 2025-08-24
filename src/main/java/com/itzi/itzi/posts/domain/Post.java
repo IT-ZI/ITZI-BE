@@ -2,6 +2,7 @@ package com.itzi.itzi.posts.domain;
 
 import com.itzi.itzi.agreement.domain.Agreement;
 import com.itzi.itzi.auth.domain.Category;
+import com.itzi.itzi.auth.domain.OrgProfile;
 import com.itzi.itzi.auth.domain.User;
 import com.itzi.itzi.partnership.domain.Partnership;
 import jakarta.persistence.*;
@@ -116,5 +117,9 @@ public class Post {
     @Enumerated(EnumType.STRING)
     @Column(name = "category")
     private Category category;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "org_id", nullable = false)
+    private OrgProfile orgProfile;
 
 }

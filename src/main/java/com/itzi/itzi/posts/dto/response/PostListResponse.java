@@ -19,7 +19,7 @@ public class PostListResponse {
     private Long postId;
     private Long userId;
 
-    private Category category;
+    private String category;
     private Type type;
     private Status status;
 
