@@ -4,6 +4,7 @@ import com.itzi.itzi.agreement.domain.Agreement;
 import com.itzi.itzi.agreement.domain.Status;
 import lombok.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Getter
@@ -31,6 +32,14 @@ public class AgreementDetailResponseDTO {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
+    // 제휴 협약서 작성 중 제휴 모집글, 문의글 조회할 때 사용
+    private Long partnershipId;
+    private Long postId;
+
+    // 협약서에서 파싱된 데이터 저장용
+    private LocalDate startDate;
+    private LocalDate endDate;
+
     public static AgreementDetailResponseDTO fromEntity(Agreement agreement) {
         return AgreementDetailResponseDTO.builder()
                 .agreementId(agreement.getAgreementId())
@@ -40,6 +49,8 @@ public class AgreementDetailResponseDTO {
                 .receiverName(agreement.getReceiverName())
                 .purpose(agreement.getPurpose())
                 .targetPeriod(agreement.getTargetPeriod())
+                .startDate(agreement.getStartDate())
+                .endDate(agreement.getEndDate())
                 .benefitCondition(agreement.getBenefitCondition())
                 .role(agreement.getRole())
                 .effect(agreement.getEffect())
@@ -48,6 +59,13 @@ public class AgreementDetailResponseDTO {
                 .status(agreement.getStatus())
                 .createdAt(agreement.getCreatedAt())
                 .updatedAt(agreement.getUpdatedAt())
+                .partnershipId(
+                        agreement.getPartnership() != null ? agreement.getPartnership().getPartnershipId() : null
+                )
+                .postId(
+                        agreement.getPost() != null ? agreement.getPost().getPostId() : null
+                )
                 .build();
     }
+
 }
