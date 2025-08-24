@@ -1,11 +1,15 @@
 package com.itzi.itzi.promotion.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itzi.itzi.agreement.domain.Agreement;
 import com.itzi.itzi.agreement.repository.AgreementRepository;
 import com.itzi.itzi.auth.domain.Category;
 import com.itzi.itzi.auth.domain.User;
+import com.itzi.itzi.auth.repository.UserRepository;
 import com.itzi.itzi.global.api.code.ErrorStatus;
 import com.itzi.itzi.global.exception.GeneralException;
+import com.itzi.itzi.global.gemini.GeminiService;
 import com.itzi.itzi.global.s3.S3Service;
 import com.itzi.itzi.posts.domain.OrderBy;
 import com.itzi.itzi.posts.domain.Post;
@@ -14,6 +18,7 @@ import com.itzi.itzi.posts.domain.Type;
 import com.itzi.itzi.posts.dto.response.PostListResponse;
 import com.itzi.itzi.posts.repository.PostRepository;
 import com.itzi.itzi.posts.service.PostService;
+import com.itzi.itzi.promotion.dto.request.PromotionAiGenerateRequest;
 import com.itzi.itzi.promotion.dto.request.PromotionDraftSaveRequest;
 import com.itzi.itzi.promotion.dto.request.PromotionManualPublishRequest;
 import com.itzi.itzi.promotion.dto.response.*;
@@ -26,8 +31,10 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.*;
 import java.util.function.Predicate;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static org.springframework.util.StringUtils.hasText;
@@ -41,6 +48,8 @@ public class PromotionService {
     private final S3Service s3Service;
     private final AgreementRepository agreementRepository;
     private final PostService postService;
+    private final GeminiService geminiService;
+    private final UserRepository userRepository;
 
     // 제휴 홍보 게시글을 맺을 수 있는 제휴 대상자 리스트 조회
     @Transactional(readOnly = true)
@@ -53,13 +62,176 @@ public class PromotionService {
                 .collect(Collectors.toList());
     }
 
+    // 제휴 홍보 게시글 AI 자동 작성
+    @Transactional
+    public PromotionAiGenerateResponse generatePromotion(Long userId, PromotionAiGenerateRequest request) {
+
+        // 1. 제휴 상태 검증 및 agreement 데이터 조회
+        Agreement agreement = agreementRepository.findById(request.getAgreementId())
+                .orElseThrow(() -> new GeneralException(ErrorStatus.AGREEMENT_NOT_FOUND, "해당하는 제휴 정보를 찾을 수 없습니다."));
+
+        if (agreement.getStatus() != com.itzi.itzi.agreement.domain.Status.APPROVED) {
+            throw new GeneralException(ErrorStatus.INVALID_STATUS, "승인된 제휴만 홍보 게시글을 생성할 수 있습니다.");
+        }
+
+        // 2. 이미 PROMOTION 타입의 Post가 존재하는지 확인
+        Optional<Post> existingPromotionPost
+                = postRepository.findByAgreement_AgreementIdAndType(agreement.getAgreementId(), Type.PROMOTION);
+
+        if (existingPromotionPost.isPresent()) {
+            throw new GeneralException(ErrorStatus.POST_ALREADY_EXISTS, "이미 제휴 홍보 게시글이 존재합니다.");
+        }
+
+        // 3. AI에게 보낼 프롬프트 구성에 필요한 기존 RECRUITING Post 조회
+        // agreement 엔티티를 사용해서 post 조회
+        Post recruitingPost = agreement.getPost();
+        if (recruitingPost == null || recruitingPost.getType() != Type.RECRUITING) {
+            throw new GeneralException(ErrorStatus.NOT_FOUND, "연결된 모집 게시글(RECRUITING)을 찾을 수 없습니다.");
+        }
+
+        // 4. Agreement 문서 내용 파싱
+        Map<String, String> agreementData = parseAgreementContent(agreement.getContent());
+
+        // 5. 프롬프트 구성
+        String prompt = buildPrompt(agreementData, recruitingPost);
+
+        // 6. AI API 호출 및 JSON 응답 파싱
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode rootNode;
+        try {
+            String geminiResponse = geminiService.callGemini(prompt);
+            rootNode = mapper.readTree(geminiResponse);
+        } catch (IOException e) {
+            throw new GeneralException(ErrorStatus.INTERNAL_ERROR, "AI 응답 파싱 오류가 발생했습니다.", e);
+        }
+
+        String generatedTitle = rootNode.get("title").asText("기본 제목");
+        String generatedContent = rootNode.get("content").asText("기본 내용");
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND, "해당 사용자를 찾을 수 없습니다."));
+
+        String periodStr = agreementData.getOrDefault("period", null);
+        if (periodStr == null || periodStr.isBlank()) {
+            periodStr = agreementData.getOrDefault("content", "");
+        }
+
+        LocalDate startDate = null;
+        LocalDate endDate = null;
+
+        String text = periodStr.replaceAll("\\s+", " ").trim();
+
+        try {
+            // 1) 한국어 날짜: 2025년 9월 1일
+            Pattern KO_DATE = Pattern.compile("(\\d{4})\\s*년\\s*(\\d{1,2})\\s*월\\s*(\\d{1,2})\\s*일");
+            // 2) ISO/기타: 2025-09-01, 2025.9.1, 2025/09/01
+            Pattern ISO_DATE = Pattern.compile("(\\d{4})[-./](\\d{1,2})[-./](\\d{1,2})");
+
+            List<LocalDate> found = new ArrayList<>();
+
+            // 한국어 날짜 수집
+            Matcher mKo = KO_DATE.matcher(text);
+            while (mKo.find()) {
+                int y = Integer.parseInt(mKo.group(1));
+                int mo = Integer.parseInt(mKo.group(2));
+                int d = Integer.parseInt(mKo.group(3));
+                found.add(LocalDate.of(y, mo, d));
+                if (found.size() >= 2) break;
+            }
+
+            // 2개 못 찾았으면 ISO로 재탐색
+            if (found.size() < 2) {
+                Matcher mIso = ISO_DATE.matcher(text);
+                while (mIso.find()) {
+                    int y = Integer.parseInt(mIso.group(1));
+                    int mo = Integer.parseInt(mIso.group(2));
+                    int d = Integer.parseInt(mIso.group(3));
+                    found.add(LocalDate.of(y, mo, d));
+                    if (found.size() >= 2) break;
+                }
+            }
+
+            if (found.size() >= 2) {
+                startDate = found.get(0);
+                endDate = found.get(1);
+
+                // 날짜 역전 금지
+                if (endDate.isBefore(startDate)) {
+                    throw new GeneralException(ErrorStatus.DATE_RANGE_INVALID, "종료일이 시작일보다 빠릅니다.");
+                }
+            } else {
+                // “부터/까지” 구분자 기반의 로직
+                if (text.contains("부터") && text.contains("까지")) {
+                    String[] parts = text.split("부터|까지");
+                    if (parts.length >= 2) {
+                        Matcher s = KO_DATE.matcher(parts[0]);
+                        if (s.find()) {
+                            startDate = LocalDate.of(
+                                    Integer.parseInt(s.group(1)),
+                                    Integer.parseInt(s.group(2)),
+                                    Integer.parseInt(s.group(3))
+                            );
+                        }
+                        Matcher e = KO_DATE.matcher(parts[1]);
+                        if (e.find()) {
+                            endDate = LocalDate.of(
+                                    Integer.parseInt(e.group(1)),
+                                    Integer.parseInt(e.group(2)),
+                                    Integer.parseInt(e.group(3))
+                            );
+                        }
+                    }
+                }
+
+                if (startDate == null || endDate == null) {
+                    throw new GeneralException(ErrorStatus.REQUIRED_FIELD_MISSING, "기간에서 날짜 2개를 찾지 못했습니다.");
+                }
+            }
+        } catch (GeneralException ge) {
+            throw ge;
+        } catch (Exception e) {
+            throw new GeneralException(ErrorStatus.INVALID_TYPE, "날짜 형식이 올바르지 않습니다.");
+        }
+
+        // 8. 새로운 PROMOTION 타입의 Post 엔티티 생성
+        Post newPromotionPost = Post.builder()
+                .type(Type.PROMOTION)
+                .status(Status.DRAFT)
+                .user(user)
+                .title(generatedTitle)
+                .content(generatedContent)
+                .startDate(startDate)
+                .endDate(endDate)
+                .target(agreementData.getOrDefault("target", "대상 미정"))
+                .benefit(agreementData.getOrDefault("benefit", "혜택 미정"))
+                .condition(agreementData.getOrDefault("condition", "조건 미정"))
+                .agreement(agreement)
+                .build();
+
+        Post saved = postRepository.save(newPromotionPost);
+
+        // 9. 응답 DTO 반환
+        return PromotionAiGenerateResponse.builder()
+                .postId(saved.getPostId())
+                .userId(userId)
+                .type(Type.PROMOTION)
+                .status(Status.DRAFT)
+                .title(saved.getTitle())
+                .target(saved.getTarget())
+                .period(startDate + "~" + endDate)
+                .benefit(saved.getBenefit())
+                .condition(saved.getCondition())
+                .content(saved.getContent())
+                .build();
+    }
+
     // 제휴 게시글 수동 작성 후 업로드
     @Transactional
     public PromotionManualPublishResponse promotionManualPublish(Long agreementId, PromotionManualPublishRequest request) {
 
-        // 0. 제휴 게시글을 맺을 수 있는 상태인지 검증 추가 필요
+        // 0. 제휴 게시글을 맺을 수 있는 상태인지 검증
         Agreement agreement = agreementRepository.findById(agreementId)
-                .orElseThrow(() -> new GeneralException(ErrorStatus.PARTNERSHIP_NOT_FOUND));
+                .orElseThrow(() -> new GeneralException(ErrorStatus.AGREEMENT_NOT_FOUND));
 
         // agreement 협의 상태가 완료인 경우에만 제휴 홍보글 작성 가능
         if (agreement.getStatus() != com.itzi.itzi.agreement.domain.Status.APPROVED) {
@@ -379,6 +551,88 @@ public class PromotionService {
                 .sender(senderInfo)
                 .receiver(receiverInfo)
                 .build();
+    }
+
+    // agreement 본문 내용에서 데이터 파싱
+    private Map<String, String> parseAgreementContent(String content) {
+        Map<String, String> data = new HashMap<>();
+
+        if (!hasText(content)) {
+            return data;
+        }
+
+        // 대상 (ex. "혜택 제공 대상은 성신여대 재학생 및 교직원으로 한정한다.")
+        Pattern targetPattern = Pattern.compile("혜택 제공 대상은 (.+?)으로 한정한다", Pattern.DOTALL);
+        Matcher targetMatcher = targetPattern.matcher(content);
+        if (targetMatcher.find()) {
+            data.put("target", targetMatcher.group(1).trim());
+        } else {
+            data.put("target", "혜택 대상 정보 없음");
+        }
+
+        // 기간 (ex. "혜택 제공 기간은 2025년 9월 1일부터 2025년 9월 14일까지로 한다.")
+        Pattern periodPattern = Pattern.compile("혜택 제공 기간은 (.+?)까지로 한다", Pattern.DOTALL);
+        Matcher periodMatcher = periodPattern.matcher(content);
+        if (periodMatcher.find()) {
+            data.put("period", periodMatcher.group(1).trim());
+        } else {
+            data.put("period", "기간 정보 없음");
+        }
+
+        // 혜택 (ex. "결제 금액의 10% 할인 제공")
+        // "다음과 같은 혜택을 제공한다" 섹션 안에서 `-`로 시작하는 항목을 찾음
+        Pattern benefitPattern = Pattern.compile("다음과 같은 혜택을 제공한다:\\s*-(.+?)-", Pattern.DOTALL);
+        Matcher benefitMatcher = benefitPattern.matcher(content);
+        if (benefitMatcher.find()) {
+            data.put("benefit", benefitMatcher.group(1).trim());
+        } else {
+            data.put("benefit", "혜택 정보 없음");
+        }
+
+        // 조건 (ex. "학생증 또는 교직원증 제시 필수")
+        Pattern conditionPattern = Pattern.compile("혜택 이용 시 (.+?) 필수", Pattern.DOTALL);
+        Matcher conditionMatcher = conditionPattern.matcher(content);
+        if (conditionMatcher.find()) {
+            data.put("condition", conditionMatcher.group(1).trim());
+        } else {
+            data.put("condition", "조건 정보 없음");
+        }
+
+        return data;
+    }
+
+    // 프롬프트 생성
+    private String buildPrompt(Map<String, String> agreementData, Post post) {
+        String template = """
+            아래 정보를 바탕으로 홍보 게시글을 350자-500자 내외로 작성
+          
+                ## 계약 정보
+                * **제휴 대상**: {target}
+                * **기간**: {period}
+                * **혜택**: {benefit}
+                * **조건**: {condition}
+            
+                ## 게시글 정보
+                * **제목**: {postTitle}
+                * **내용**: {postContent}
+            
+                ## 작성 조건
+                * **다음과 같은 섹션을 포함할 것:**
+                    * 💚 대상
+                    * 💚 혜택
+                    * 💚 기간
+                * **핵심 내용(대상, 혜택, 기간, 조건)은 목록 형태로 명확하게 정리**
+                * **마지막 문단에는 마무리 문구를 1-2문장 사용**
+                * 게시글의 내용과 관련된 이모티콘을 적절히 사용
+                * 응답은 JSON 형식으로 반환: {"title": "...", "content": "..."}
+            """;
+
+        return template.replace("{target}", agreementData.getOrDefault("target", ""))
+                .replace("{period}", agreementData.getOrDefault("period", "기간 미정"))
+                .replace("{benefit}", agreementData.getOrDefault("benefit", "혜택 미정"))
+                .replace("{condition}", agreementData.getOrDefault("condition", "조건 미정"))
+                .replace("{postTitle}", post.getTitle())
+                .replace("{postContent}", post.getContent());
     }
 
     private PromotionManualPublishResponse buildPublishResponse(Post saved) {

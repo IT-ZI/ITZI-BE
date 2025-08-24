@@ -6,6 +6,7 @@ import com.itzi.itzi.global.api.dto.ApiResponse;
 import com.itzi.itzi.posts.domain.OrderBy;
 import com.itzi.itzi.posts.domain.Type;
 import com.itzi.itzi.posts.dto.response.PostListResponse;
+import com.itzi.itzi.promotion.dto.request.PromotionAiGenerateRequest;
 import com.itzi.itzi.promotion.dto.request.PromotionDraftSaveRequest;
 import com.itzi.itzi.promotion.dto.request.PromotionManualPublishRequest;
 import com.itzi.itzi.promotion.dto.response.*;
@@ -29,6 +30,16 @@ public class PromotionController {
     public ApiResponse<List<String>> getAvailableAgreements() {
         List<String> receiverNames  = promotionService.getAvailableAgreement();
         return ApiResponse.of(SuccessStatus._OK, receiverNames);
+    }
+
+    // 제휴 게시글 1차 AI 자동 작성
+    @PostMapping("/ai")
+    public ApiResponse<PromotionAiGenerateResponse> promotionAiGenerate(@RequestBody PromotionAiGenerateRequest request) {
+
+        Long fixedUserId = 1L;
+
+        PromotionAiGenerateResponse response = promotionService.generatePromotion(fixedUserId, request);
+        return ApiResponse.of(SuccessStatus._OK, response);
     }
 
     // 제휴 게시글 수동 작성 후 업로드
