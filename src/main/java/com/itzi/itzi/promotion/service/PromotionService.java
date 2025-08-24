@@ -24,11 +24,16 @@ import com.itzi.itzi.promotion.dto.request.PromotionManualPublishRequest;
 import com.itzi.itzi.promotion.dto.response.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -48,8 +53,13 @@ public class PromotionService {
     private final S3Service s3Service;
     private final AgreementRepository agreementRepository;
     private final PostService postService;
-    private final GeminiService geminiService;
     private final UserRepository userRepository;
+
+    @Value("${gemini.api.key}")
+    private String apiKey;
+
+    private static final String GEMINI_ENDPOINT =
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
     // 제휴 홍보 게시글을 맺을 수 있는 제휴 대상자 리스트 조회
     @Transactional(readOnly = true)
@@ -99,7 +109,7 @@ public class PromotionService {
         ObjectMapper mapper = new ObjectMapper();
         JsonNode rootNode;
         try {
-            String geminiResponse = geminiService.callGemini(prompt);
+            String geminiResponse = callGemini(prompt);
             rootNode = mapper.readTree(geminiResponse);
         } catch (IOException e) {
             throw new GeneralException(ErrorStatus.INTERNAL_ERROR, "AI 응답 파싱 오류가 발생했습니다.", e);
@@ -633,6 +643,75 @@ public class PromotionService {
                 .replace("{condition}", agreementData.getOrDefault("condition", "조건 미정"))
                 .replace("{postTitle}", post.getTitle())
                 .replace("{postContent}", post.getContent());
+    }
+
+    private String callGemini(String prompt) {
+        try {
+            if (!hasText(apiKey)) {
+                throw new GeneralException(ErrorStatus.GEMINI_API_KEY_MISSING);
+            }
+
+            ObjectMapper om = new ObjectMapper();
+
+            String body = "{"
+                    + "\"contents\":[{"
+                    + "  \"parts\":[{"
+                    + "    \"text\":" + om.writeValueAsString(prompt)
+                    + "  }]"
+                    + "}]"
+                    + "}";
+
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create(GEMINI_ENDPOINT + "?key=" + apiKey))
+                    .header("Content-Type", "application/json; charset=UTF-8")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .build();
+
+            HttpClient client = HttpClient.newHttpClient();
+            HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+
+            // HTTP 레벨 에러 : GEMINI_HTTP_ERROR
+            if (resp.statusCode() < 200 || resp.statusCode() >= 300) {
+                throw new GeneralException(ErrorStatus.GEMINI_HTTP_ERROR,
+                        "status=" + resp.statusCode() + ", body=" + resp.body());
+            }
+
+            JsonNode root = om.readTree(resp.body());
+
+            // 안전성 차단
+            JsonNode feedback = root.path("promptFeedback");
+            if (!feedback.isMissingNode()) {
+                String blockReason = feedback.path("blockReason").asText("");
+                if (hasText(blockReason)) {
+                    throw new GeneralException(ErrorStatus.GEMINI_BLOCKED,
+                            blockReason + " / " + resp.body());
+                }
+            }
+
+            // candidates/parts 포맷 검증 : GEMINI_INVALID_RESPONSE
+            JsonNode candidates = root.path("candidates");
+            if (!candidates.isArray() || candidates.isEmpty()) {
+                throw new GeneralException(ErrorStatus.GEMINI_INVALID_RESPONSE,
+                        "AI 응답에 canditdates 누락: " + resp.body());
+            }
+
+            JsonNode parts = candidates.get(0).path("content").path("parts");
+            if (!parts.isArray() || parts.isEmpty()) {
+                throw new RuntimeException("AI 응답에 parts 누락: " + resp.body());
+            }
+
+            // 빈 텍스트를 반환했을 경우
+            String text = parts.get(0).path("text").asText();
+            if (!hasText(text)) {
+                throw new GeneralException(ErrorStatus.GEMINI_EMPTY_TEXT, "body=" + resp.body());
+            }
+
+            return text.trim();
+
+        } catch (Exception e) {
+            throw new GeneralException(ErrorStatus.INTERNAL_ERROR, e.getMessage());
+
+        }
     }
 
     private PromotionManualPublishResponse buildPublishResponse(Post saved) {

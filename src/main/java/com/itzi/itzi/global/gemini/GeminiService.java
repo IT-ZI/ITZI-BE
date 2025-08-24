@@ -92,23 +92,7 @@ public class GeminiService {
                 throw new GeneralException(ErrorStatus.GEMINI_EMPTY_TEXT, "body=" + resp.body());
             }
 
-            Pattern jsonPattern = Pattern.compile("\\{[^{}]*\\}");
-            Matcher matcher = jsonPattern.matcher(text);
-
-            if (matcher.find()) {
-                String jsonResult = matcher.group();
-                // 최종적으로 추출된 문자열이 유효한 JSON인지 검증
-                try {
-                    om.readTree(jsonResult);
-                    return jsonResult.trim();
-                } catch (IOException e) {
-                    throw new GeneralException(ErrorStatus.GEMINI_INVALID_RESPONSE,
-                            "추출된 문자열이 유효한 JSON이 아닙니다: " + jsonResult);
-                }
-            } else {
-                throw new GeneralException(ErrorStatus.GEMINI_INVALID_RESPONSE,
-                        "AI 응답에서 JSON 객체를 찾을 수 없습니다: " + text);
-            }
+            return text.trim();
 
         } catch (Exception e) {
             throw new GeneralException(ErrorStatus.INTERNAL_ERROR, e.getMessage());
