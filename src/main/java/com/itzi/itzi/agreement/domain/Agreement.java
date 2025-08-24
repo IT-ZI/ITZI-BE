@@ -6,6 +6,7 @@ import com.itzi.itzi.partnership.domain.Partnership;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -69,6 +70,14 @@ public class Agreement {
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    // 협약서에서 파싱된 데이터 - 기간 시작
+    @Column(name = "start_date")
+    private LocalDate startDate;
+
+    // 협약서에서 파싱된 데이터 - 기간 끝
+    @Column(name = "end_date")
+    private LocalDate endDate;
 
     @PrePersist
     public void prePersist() {
