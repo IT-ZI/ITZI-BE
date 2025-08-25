@@ -11,7 +11,9 @@ import java.util.List;
 @Repository
 public interface AgreementRepository extends JpaRepository<Agreement, Long> {
 
-    List<Agreement> findByStatusAndPostIsNull(Status status);
+//    List<Agreement> findByStatusAndPostIsNull(Status status);
+
+        List<Agreement> findByStatus(Status status);
 
     // ✅ 특정 유저(sender or receiver)가 포함된 협약서 조회
     @EntityGraph(attributePaths = {"sender","receiver"})
