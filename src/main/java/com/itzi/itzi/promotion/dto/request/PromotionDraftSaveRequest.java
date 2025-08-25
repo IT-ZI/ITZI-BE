@@ -12,6 +12,7 @@ public class PromotionDraftSaveRequest {
 
     // 존재할 경우 해당 DRAFT 글 업데이트, 없으면 생성
     private Long postId;
+    private Long agreementId;
 
     private MultipartFile postImage;
     private String title;

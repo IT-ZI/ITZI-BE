@@ -5,11 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itzi.itzi.agreement.domain.Agreement;
 import com.itzi.itzi.agreement.repository.AgreementRepository;
 import com.itzi.itzi.auth.domain.Category;
+import com.itzi.itzi.auth.domain.OrgProfile;
 import com.itzi.itzi.auth.domain.User;
+import com.itzi.itzi.auth.repository.OrgProfileRepository;
 import com.itzi.itzi.auth.repository.UserRepository;
 import com.itzi.itzi.global.api.code.ErrorStatus;
 import com.itzi.itzi.global.exception.GeneralException;
-import com.itzi.itzi.global.gemini.GeminiService;
 import com.itzi.itzi.global.s3.S3Service;
 import com.itzi.itzi.posts.domain.OrderBy;
 import com.itzi.itzi.posts.domain.Post;
@@ -54,6 +55,7 @@ public class PromotionService {
     private final AgreementRepository agreementRepository;
     private final PostService postService;
     private final UserRepository userRepository;
+    private final OrgProfileRepository orgProfileRepository;
 
     @Value("${gemini.api.key}")
     private String apiKey;
@@ -64,7 +66,7 @@ public class PromotionService {
     // 제휴 홍보 게시글을 맺을 수 있는 제휴 대상자 리스트 조회
     @Transactional(readOnly = true)
     public List<String> getAvailableAgreement() {
-        List<Agreement> agreementList = agreementRepository.findByStatusAndPostIsNull(com.itzi.itzi.agreement.domain.Status.APPROVED);
+        List<Agreement> agreementList = agreementRepository.findByStatus(com.itzi.itzi.agreement.domain.Status.APPROVED);
 
         return agreementList.stream()
                 .map(Agreement::getReceiverName) // Agreement 객체에서 receiverName만 추출
@@ -237,7 +239,13 @@ public class PromotionService {
 
     // 제휴 게시글 수동 작성 후 업로드
     @Transactional
-    public PromotionManualPublishResponse promotionManualPublish(Long agreementId, PromotionManualPublishRequest request) {
+    public PromotionManualPublishResponse promotionManualPublish(Long userId, Long agreementId, PromotionManualPublishRequest request) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
+
+        OrgProfile orgProfile = orgProfileRepository.findByUser_UserId(userId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
 
         // 0. 제휴 게시글을 맺을 수 있는 상태인지 검증
         Agreement agreement = agreementRepository.findById(agreementId)
@@ -249,7 +257,7 @@ public class PromotionService {
         }
 
         // Agreement에 연결된 Post가 이미 있는지 확인
-        if (agreement.getPost() != null) {
+        if (agreement.getPost() != null && agreement.getPost().getType() == Type.PROMOTION) {
             throw new GeneralException(ErrorStatus.POST_ALREADY_EXISTS);
         }
 
@@ -264,6 +272,8 @@ public class PromotionService {
         Post post = Post.builder()
                 .type(Type.PROMOTION)
                 .status(Status.PUBLISHED)
+                .user(user)
+                .orgProfile(orgProfile)
                 .user(agreement.getSender())
                 .sender(agreement.getSender())
                 .receiver(agreement.getReceiver())
@@ -317,7 +327,21 @@ public class PromotionService {
     @Transactional
     public PromotionDraftSaveResponse promotionDraft(Long userId, PromotionDraftSaveRequest request) {
 
-        // 0. 제휴 게시글을 맺을 수 있는 상태인지 검증 추가 필요
+        // 1. 제휴 상태 검증 및 agreement 데이터 조회
+        Agreement agreement = agreementRepository.findById(request.getAgreementId())
+                .orElseThrow(() -> new GeneralException(ErrorStatus.AGREEMENT_NOT_FOUND, "해당하는 제휴 정보를 찾을 수 없습니다."));
+
+        if (agreement.getStatus() != com.itzi.itzi.agreement.domain.Status.APPROVED) {
+            throw new GeneralException(ErrorStatus.INVALID_STATUS, "승인된 제휴만 홍보 게시글을 생성할 수 있습니다.");
+        }
+
+        // 2. 이미 PROMOTION 타입의 Post가 존재하는지 확인
+        Optional<Post> existingPromotionPost
+                = postRepository.findByAgreement_AgreementIdAndType(agreement.getAgreementId(), Type.PROMOTION);
+
+        if (existingPromotionPost.isPresent()) {
+            throw new GeneralException(ErrorStatus.POST_ALREADY_EXISTS, "이미 제휴 홍보 게시글이 존재합니다.");
+        }
 
         // 1. 필수 값 검증
         validateHasAnyDraftField(request);
@@ -326,6 +350,9 @@ public class PromotionService {
         validateOptionalDateRange(request.getStartDate(), request.getEndDate());
 
         Post post;
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND, "해당 사용자를 찾을 수 없습니다."));
 
         if (request.getPostId() != null) {
             post = postRepository.findById(request.getPostId())
@@ -344,7 +371,7 @@ public class PromotionService {
             // 새 제휴 게시글 생성
             post = Post.builder()
                     .status(Status.DRAFT)
-//                    .userId(userId)
+                    .user(user)
                     .user(User.builder().userId(userId).build())
                     .type(Type.PROMOTION)
                     .build();
@@ -495,11 +522,10 @@ public class PromotionService {
 
     // 내가 작성한 제휴 홍보 게시글 카드뷰 조회
     @Transactional(readOnly = true)
-    public List<PromotionListResponse> getMyPromotionsList(Type type) {
-        Long FIXED_USER_ID = 1L;
+    public List<PromotionListResponse> getMyPromotionsList(Long userId, Type type) {
         List<Status> statuses = List.of(Status.DRAFT, Status.PUBLISHED);
 
-        return postRepository.findByUser_UserIdAndTypeAndStatusIn(FIXED_USER_ID, type, statuses)
+        return postRepository.findByUser_UserIdAndTypeAndStatusIn(userId, type, statuses)
                 .stream()
                 .map(this::toListResponse)
                 .toList();
@@ -507,7 +533,7 @@ public class PromotionService {
 
     // 게시된 제휴 홍보글 단건 조회
     @Transactional(readOnly = true)
-    public PromotionDetailResponse getPromotionDetail(Long postId) {
+    public PromotionDetailResponse getPromotionDetail(Long userId, Long postId) {
 
         // 존재하는 게시글인지 확인
         Post post = postRepository.findById(postId).orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
@@ -523,6 +549,9 @@ public class PromotionService {
             // 제휴 협약서가 없는 경우
             throw new GeneralException(ErrorStatus.NOT_FOUND, "해당 게시글에 연결된 협약서가 없습니다.");
         }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
 
         // 발신자 정보 처리
         Object senderInfo = null;
@@ -543,8 +572,8 @@ public class PromotionService {
         }
 
         return PromotionDetailResponse.builder()
-                .userId(1L)                     // userId는 1로 고정
-                .category(post.getCategory().getDescription())
+                .userId(userId)
+                .category(post.getUser().getInterest().getDescription())
                 .postId(post.getPostId())
                 .type(post.getType())
                 .status(post.getStatus())
@@ -719,6 +748,8 @@ public class PromotionService {
                 .type(saved.getType())
                 .status(saved.getStatus())
                 .postId(saved.getPostId())
+                .senderName(saved.getSender().getProfileName())
+                .receiverName(saved.getReceiver().getProfileName())
                 .postImage(saved.getPostImage())
                 .title(saved.getTitle())
                 .target(saved.getTarget())
