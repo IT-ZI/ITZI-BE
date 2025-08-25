@@ -327,7 +327,21 @@ public class PromotionService {
     @Transactional
     public PromotionDraftSaveResponse promotionDraft(Long userId, PromotionDraftSaveRequest request) {
 
-        // 0. 제휴 게시글을 맺을 수 있는 상태인지 검증 추가 필요
+        // 1. 제휴 상태 검증 및 agreement 데이터 조회
+        Agreement agreement = agreementRepository.findById(request.getAgreementId())
+                .orElseThrow(() -> new GeneralException(ErrorStatus.AGREEMENT_NOT_FOUND, "해당하는 제휴 정보를 찾을 수 없습니다."));
+
+        if (agreement.getStatus() != com.itzi.itzi.agreement.domain.Status.APPROVED) {
+            throw new GeneralException(ErrorStatus.INVALID_STATUS, "승인된 제휴만 홍보 게시글을 생성할 수 있습니다.");
+        }
+
+        // 2. 이미 PROMOTION 타입의 Post가 존재하는지 확인
+        Optional<Post> existingPromotionPost
+                = postRepository.findByAgreement_AgreementIdAndType(agreement.getAgreementId(), Type.PROMOTION);
+
+        if (existingPromotionPost.isPresent()) {
+            throw new GeneralException(ErrorStatus.POST_ALREADY_EXISTS, "이미 제휴 홍보 게시글이 존재합니다.");
+        }
 
         // 1. 필수 값 검증
         validateHasAnyDraftField(request);
@@ -336,6 +350,9 @@ public class PromotionService {
         validateOptionalDateRange(request.getStartDate(), request.getEndDate());
 
         Post post;
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND, "해당 사용자를 찾을 수 없습니다."));
 
         if (request.getPostId() != null) {
             post = postRepository.findById(request.getPostId())
@@ -354,7 +371,7 @@ public class PromotionService {
             // 새 제휴 게시글 생성
             post = Post.builder()
                     .status(Status.DRAFT)
-//                    .userId(userId)
+                    .user(user)
                     .user(User.builder().userId(userId).build())
                     .type(Type.PROMOTION)
                     .build();
@@ -505,11 +522,10 @@ public class PromotionService {
 
     // 내가 작성한 제휴 홍보 게시글 카드뷰 조회
     @Transactional(readOnly = true)
-    public List<PromotionListResponse> getMyPromotionsList(Type type) {
-        Long FIXED_USER_ID = 1L;
+    public List<PromotionListResponse> getMyPromotionsList(Long userId, Type type) {
         List<Status> statuses = List.of(Status.DRAFT, Status.PUBLISHED);
 
-        return postRepository.findByUser_UserIdAndTypeAndStatusIn(FIXED_USER_ID, type, statuses)
+        return postRepository.findByUser_UserIdAndTypeAndStatusIn(userId, type, statuses)
                 .stream()
                 .map(this::toListResponse)
                 .toList();
@@ -517,7 +533,7 @@ public class PromotionService {
 
     // 게시된 제휴 홍보글 단건 조회
     @Transactional(readOnly = true)
-    public PromotionDetailResponse getPromotionDetail(Long postId) {
+    public PromotionDetailResponse getPromotionDetail(Long userId, Long postId) {
 
         // 존재하는 게시글인지 확인
         Post post = postRepository.findById(postId).orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
@@ -533,6 +549,9 @@ public class PromotionService {
             // 제휴 협약서가 없는 경우
             throw new GeneralException(ErrorStatus.NOT_FOUND, "해당 게시글에 연결된 협약서가 없습니다.");
         }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
 
         // 발신자 정보 처리
         Object senderInfo = null;
@@ -553,8 +572,8 @@ public class PromotionService {
         }
 
         return PromotionDetailResponse.builder()
-                .userId(1L)                     // userId는 1로 고정
-                .category(post.getCategory().getDescription())
+                .userId(userId)
+                .category(post.getUser().getInterest().getDescription())
                 .postId(post.getPostId())
                 .type(post.getType())
                 .status(post.getStatus())
@@ -729,6 +748,8 @@ public class PromotionService {
                 .type(saved.getType())
                 .status(saved.getStatus())
                 .postId(saved.getPostId())
+                .senderName(saved.getSender().getProfileName())
+                .receiverName(saved.getReceiver().getProfileName())
                 .postImage(saved.getPostImage())
                 .title(saved.getTitle())
                 .target(saved.getTarget())

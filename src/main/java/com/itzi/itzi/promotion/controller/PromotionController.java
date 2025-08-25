@@ -34,11 +34,12 @@ public class PromotionController {
 
     // 제휴 게시글 1차 AI 자동 작성
     @PostMapping("/ai")
-    public ApiResponse<PromotionAiGenerateResponse> promotionAiGenerate(@RequestBody PromotionAiGenerateRequest request) {
+    public ApiResponse<PromotionAiGenerateResponse> promotionAiGenerate(
+            @RequestBody PromotionAiGenerateRequest request,
+            @RequestParam(name="userId") Long userId)
+    {
 
-        Long fixedUserId = 1L;
-
-        PromotionAiGenerateResponse response = promotionService.generatePromotion(fixedUserId, request);
+        PromotionAiGenerateResponse response = promotionService.generatePromotion(userId, request);
         return ApiResponse.of(SuccessStatus._OK, response);
     }
 
@@ -117,16 +118,16 @@ public class PromotionController {
 
     // 내가 작성한 제휴 홍보 게시글 목록 조회
     @GetMapping("/mine")
-    public ApiResponse<List<PromotionListResponse>> getMyPromotionsList(@RequestParam Type type) {
+    public ApiResponse<List<PromotionListResponse>> getMyPromotionsList(@RequestParam(name="userId") Long userId, @RequestParam Type type) {
 
-        List<PromotionListResponse> response = promotionService.getMyPromotionsList(type);
+        List<PromotionListResponse> response = promotionService.getMyPromotionsList(userId, type);
         return ApiResponse.of(SuccessStatus._OK, response);
     }
 
     // 게시된 제휴 홍보글 단건 조회
     @GetMapping("/{postId}")
-    public ApiResponse<PromotionDetailResponse> getPromotionDetail(@PathVariable Long postId) {
-        PromotionDetailResponse response = promotionService.getPromotionDetail(postId);
+    public ApiResponse<PromotionDetailResponse> getPromotionDetail(@RequestParam(name="userId") Long userId, @PathVariable Long postId) {
+        PromotionDetailResponse response = promotionService.getPromotionDetail(userId, postId);
         return ApiResponse.of(SuccessStatus._OK, response);
     }
 }
