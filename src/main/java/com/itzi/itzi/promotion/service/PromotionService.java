@@ -172,6 +172,9 @@ public class PromotionService {
                 .benefit(agreementData.getOrDefault("benefit", "혜택 미정"))
                 .condition(agreementData.getOrDefault("condition", "조건 미정"))
                 .agreement(agreement)
+                .exposeTargetInfo(true)
+                .exposeProposerInfo(true)
+                .exposureEndDate(endDate)
                 .orgProfile(orgProfile)
                 .build();
 
