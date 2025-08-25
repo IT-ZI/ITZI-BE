@@ -21,7 +21,7 @@ public class Store {
     @Column(name = "store_id", nullable = false, unique = true)
     private Long storeId;
 
-    @Column(name = "store_image", nullable = false)
+    @Column(name = "store_image", nullable = false, length = 500)
     private String storeImage;
 
     // 매장 이름
