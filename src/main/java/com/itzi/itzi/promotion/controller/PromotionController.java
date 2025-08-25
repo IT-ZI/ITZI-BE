@@ -59,10 +59,10 @@ public class PromotionController {
     // 제휴 게시글 임시 저장
     @PostMapping("/draft")
     public ApiResponse<PromotionDraftSaveResponse> promotionDraft(
+            @RequestParam(name="userId") Long userId,
             @ModelAttribute PromotionDraftSaveRequest request
     ) {
-        Long fixedUserId = 1L;
-        PromotionDraftSaveResponse response = promotionService.promotionDraft(fixedUserId, request);
+        PromotionDraftSaveResponse response = promotionService.promotionDraft(userId, request);
 
         return ApiResponse.of(SuccessStatus._OK, response);
     }

@@ -42,6 +42,7 @@ import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.springframework.util.StringUtils.hasText;
 
@@ -101,108 +102,60 @@ public class PromotionService {
             throw new GeneralException(ErrorStatus.NOT_FOUND, "연결된 모집 게시글(RECRUITING)을 찾을 수 없습니다.");
         }
 
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
+
+        OrgProfile orgProfile = orgProfileRepository.findByUser_UserId(userId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
+
         // 4. Agreement 문서 내용 파싱
         Map<String, String> agreementData = parseAgreementContent(agreement.getContent());
 
         // 5. 프롬프트 구성
         String prompt = buildPrompt(agreementData, recruitingPost);
 
-        // 6. AI API 호출 및 JSON 응답 파싱
+        // 6. AI API 호출 및 JSON 응답 파싱 (이전 답변대로 sanitize + lenient parser 적용 권장)
         ObjectMapper mapper = new ObjectMapper();
         JsonNode rootNode;
-        try {
-            String geminiResponse = callGemini(prompt);
-            rootNode = mapper.readTree(geminiResponse);
-        } catch (IOException e) {
-            throw new GeneralException(ErrorStatus.INTERNAL_ERROR, "AI 응답 파싱 오류가 발생했습니다.", e);
+        {
+            String geminiRaw  = callGemini(prompt);
+            String geminiJson = sanitizeModelTextToJson(geminiRaw);
+            rootNode = parseJsonStrictFirstThenLenient(mapper, geminiJson);
         }
 
-        String generatedTitle = rootNode.get("title").asText("기본 제목");
-        String generatedContent = rootNode.get("content").asText("기본 내용");
+        String generatedTitle   = rootNode.path("title").asText("기본 제목");
+        String generatedContent = rootNode.path("content").asText("기본 내용");
 
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND, "해당 사용자를 찾을 수 없습니다."));
+        // 7. 기간 결정 (Agreement의 명시 필드를 최우선)
+        LocalDate startDate = agreement.getStartDate();
+        LocalDate endDate   = agreement.getEndDate();
 
-        String periodStr = agreementData.getOrDefault("period", null);
-        if (periodStr == null || periodStr.isBlank()) {
-            periodStr = agreementData.getOrDefault("content", "");
+        if (startDate == null || endDate == null) {
+            // 필드가 비어있다면 문자열에서 파싱 시도
+            String rawPeriod = Stream.of(
+                            agreement.getTargetPeriod(),
+                            agreementData.get("period"),
+                            agreementData.get("target_period"),
+                            // 모집글의 start/end가 있으면 Fallback
+                            (recruitingPost.getStartDate() != null && recruitingPost.getEndDate() != null)
+                                    ? recruitingPost.getStartDate() + "~" + recruitingPost.getEndDate()
+                                    : null,
+                            agreement.getContent(),
+                            recruitingPost.getContent()
+                    ).filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .findFirst()
+                    .orElse("");
+
+            DateRange dr = parseDateRangeFlexible(rawPeriod,
+                    recruitingPost.getStartDate() != null ? recruitingPost.getStartDate() : LocalDate.now());
+            startDate = dr.start;
+            endDate   = dr.end;
         }
 
-        LocalDate startDate = null;
-        LocalDate endDate = null;
-
-        String text = periodStr.replaceAll("\\s+", " ").trim();
-
-        try {
-            // 1) 한국어 날짜: 2025년 9월 1일
-            Pattern KO_DATE = Pattern.compile("(\\d{4})\\s*년\\s*(\\d{1,2})\\s*월\\s*(\\d{1,2})\\s*일");
-            // 2) ISO/기타: 2025-09-01, 2025.9.1, 2025/09/01
-            Pattern ISO_DATE = Pattern.compile("(\\d{4})[-./](\\d{1,2})[-./](\\d{1,2})");
-
-            List<LocalDate> found = new ArrayList<>();
-
-            // 한국어 날짜 수집
-            Matcher mKo = KO_DATE.matcher(text);
-            while (mKo.find()) {
-                int y = Integer.parseInt(mKo.group(1));
-                int mo = Integer.parseInt(mKo.group(2));
-                int d = Integer.parseInt(mKo.group(3));
-                found.add(LocalDate.of(y, mo, d));
-                if (found.size() >= 2) break;
-            }
-
-            // 2개 못 찾았으면 ISO로 재탐색
-            if (found.size() < 2) {
-                Matcher mIso = ISO_DATE.matcher(text);
-                while (mIso.find()) {
-                    int y = Integer.parseInt(mIso.group(1));
-                    int mo = Integer.parseInt(mIso.group(2));
-                    int d = Integer.parseInt(mIso.group(3));
-                    found.add(LocalDate.of(y, mo, d));
-                    if (found.size() >= 2) break;
-                }
-            }
-
-            if (found.size() >= 2) {
-                startDate = found.get(0);
-                endDate = found.get(1);
-
-                // 날짜 역전 금지
-                if (endDate.isBefore(startDate)) {
-                    throw new GeneralException(ErrorStatus.DATE_RANGE_INVALID, "종료일이 시작일보다 빠릅니다.");
-                }
-            } else {
-                // “부터/까지” 구분자 기반의 로직
-                if (text.contains("부터") && text.contains("까지")) {
-                    String[] parts = text.split("부터|까지");
-                    if (parts.length >= 2) {
-                        Matcher s = KO_DATE.matcher(parts[0]);
-                        if (s.find()) {
-                            startDate = LocalDate.of(
-                                    Integer.parseInt(s.group(1)),
-                                    Integer.parseInt(s.group(2)),
-                                    Integer.parseInt(s.group(3))
-                            );
-                        }
-                        Matcher e = KO_DATE.matcher(parts[1]);
-                        if (e.find()) {
-                            endDate = LocalDate.of(
-                                    Integer.parseInt(e.group(1)),
-                                    Integer.parseInt(e.group(2)),
-                                    Integer.parseInt(e.group(3))
-                            );
-                        }
-                    }
-                }
-
-                if (startDate == null || endDate == null) {
-                    throw new GeneralException(ErrorStatus.REQUIRED_FIELD_MISSING, "기간에서 날짜 2개를 찾지 못했습니다.");
-                }
-            }
-        } catch (GeneralException ge) {
-            throw ge;
-        } catch (Exception e) {
-            throw new GeneralException(ErrorStatus.INVALID_TYPE, "날짜 형식이 올바르지 않습니다.");
+        if (endDate.isBefore(startDate)) {
+            throw new GeneralException(ErrorStatus.DATE_RANGE_INVALID, "종료일이 시작일보다 빠릅니다.");
         }
 
         // 8. 새로운 PROMOTION 타입의 Post 엔티티 생성
@@ -211,6 +164,7 @@ public class PromotionService {
                 .status(Status.DRAFT)
                 .user(user)
                 .title(generatedTitle)
+                .postImage(user.getProfileImage())                  // ai 반환 시 기본 이미지는 프로필 이미지로 사용
                 .content(generatedContent)
                 .startDate(startDate)
                 .endDate(endDate)
@@ -218,6 +172,7 @@ public class PromotionService {
                 .benefit(agreementData.getOrDefault("benefit", "혜택 미정"))
                 .condition(agreementData.getOrDefault("condition", "조건 미정"))
                 .agreement(agreement)
+                .orgProfile(orgProfile)
                 .build();
 
         Post saved = postRepository.save(newPromotionPost);
@@ -905,6 +860,187 @@ public class PromotionService {
                 .endDate(post.getEndDate())
                 .benefit(post.getBenefit())
                 .build();
+    }
+
+    // 모델이 종종 붙이는 ```json ... ``` / ``` ... ``` / 앞뒤 설명문 제거 및 따옴표/BOM 정규화
+    private String sanitizeModelTextToJson(String text) {
+        if (text == null) return "";
+        String s = text.trim();
+
+        // 코드펜스(백틱) 제거
+        s = s.replaceAll("(?s)^```(?:json)?\\s*", "");
+        s = s.replaceAll("(?s)\\s*```$", "");
+
+        // 최초 '{'부터 마지막 '}'까지 추출 (앞뒤 잡설 제거)
+        int start = s.indexOf('{');
+        int end   = s.lastIndexOf('}');
+        if (start >= 0 && end >= start) {
+            s = s.substring(start, end + 1);
+        }
+
+        // 스마트 따옴표 정규화
+        s = s.replace('“','"').replace('”','"')
+                .replace('’','\'').replace('‘','\'');
+
+        // BOM 제거
+        if (!s.isEmpty() && s.charAt(0) == '\uFEFF') {
+            s = s.substring(1);
+        }
+        return s.trim();
+    }
+
+    // JSON 파싱: 1차 엄격 시도 → 실패 시 sanitize 후 2차 시도
+    private JsonNode parseJsonStrictFirstThenLenient(ObjectMapper mapper, String raw) {
+        try {
+            return mapper.readTree(raw);
+        } catch (IOException first) {
+            String cleaned = sanitizeModelTextToJson(raw);
+            try {
+                return mapper.readTree(cleaned);
+            } catch (IOException second) {
+                String preview = cleaned.length() > 200 ? cleaned.substring(0, 200) + "..." : cleaned;
+                throw new GeneralException(
+                        ErrorStatus.INTERNAL_ERROR,
+                        "AI 응답 파싱 실패 (preview=" + preview + ")",
+                        second
+                );
+            }
+        }
+    }
+
+    private static class DateRange {
+        final LocalDate start;
+        final LocalDate end;
+        DateRange(LocalDate s, LocalDate e) { this.start = s; this.end = e; }
+    }
+
+    private DateRange parseDateRangeFlexible(String text, LocalDate base) {
+        if (text == null) text = "";
+        // 물결/대시/스페이스 정규화
+        String t = text.replaceAll("[~∼〜－–—]", "~")
+                .replaceAll("\\s+", " ")
+                .trim();
+
+        // 1) 완전한 한국어 날짜 2개: 2025년 9월 1일 ~ 2025년 9월 14일
+        Pattern FULL_KO2 = Pattern.compile(
+                "(\\d{4})\\s*년\\s*(\\d{1,2})\\s*월\\s*(\\d{1,2})\\s*일\\s*~\\s*(\\d{4})\\s*년\\s*(\\d{1,2})\\s*월\\s*(\\d{1,2})\\s*일"
+        );
+
+        // 2) 앞은 연·월·일, 뒤는 '일'만: 2025년 9월 1일 ~ 14일
+        Pattern KO_DAY_OMITTED = Pattern.compile(
+                "(\\d{4})\\s*년\\s*(\\d{1,2})\\s*월\\s*(\\d{1,2})\\s*일\\s*~\\s*(\\d{1,2})\\s*일"
+        );
+
+        // 3) 앞은 연·월·일, 뒤는 월·일: 2025년 9월 1일 ~ 10월 14일 (연 생략)
+        Pattern KO_YEAR_OMITTED = Pattern.compile(
+                "(\\d{4})\\s*년\\s*(\\d{1,2})\\s*월\\s*(\\d{1,2})\\s*일\\s*~\\s*(\\d{1,2})\\s*월\\s*(\\d{1,2})\\s*일"
+        );
+
+        // 4) 단순 KO 범위: 9월 1일~14일 (연 생략, base에서 연도 보정)
+        Pattern KO_SIMPLE = Pattern.compile(
+                "(\\d{1,2})\\s*월\\s*(\\d{1,2})\\s*일\\s*~\\s*(\\d{1,2})(?:\\s*월)?\\s*(\\d{1,2})\\s*일"
+        );
+
+        // 5) ISO/숫자 혼합: 2025-09-01 ~ 2025-09-14
+        Pattern ISO2 = Pattern.compile(
+                "(\\d{4})[-./](\\d{1,2})[-./](\\d{1,2})\\s*~\\s*(\\d{4})[-./](\\d{1,2})[-./](\\d{1,2})"
+        );
+
+        // 6) 앞은 Y-M-D, 뒤는 M-D만: 2025-09-01 ~ 10-14
+        Pattern ISO_YEAR_OMITTED = Pattern.compile(
+                "(\\d{4})[-./](\\d{1,2})[-./](\\d{1,2})\\s*~\\s*(\\d{1,2})[-./](\\d{1,2})"
+        );
+
+        // 7) MM/DD ~ MM/DD (연도 생략 → base에서 보정)
+        Pattern MD_RANGE = Pattern.compile(
+                "(\\d{1,2})[-./](\\d{1,2})\\s*~\\s*(\\d{1,2})[-./](\\d{1,2})"
+        );
+
+        // 8) 단일 날짜만 있는 경우: 단일일 프로모션으로 간주(요구사항에 맞게 선택)
+        Pattern SINGLE_KO = Pattern.compile("(\\d{4})\\s*년\\s*(\\d{1,2})\\s*월\\s*(\\d{1,2})\\s*일");
+        Pattern SINGLE_ISO = Pattern.compile("(\\d{4})[-./](\\d{1,2})[-./](\\d{1,2})");
+
+        LocalDate todayBase = (base != null) ? base : LocalDate.now();
+
+        Matcher m;
+
+        // 1
+        m = FULL_KO2.matcher(t);
+        if (m.find()) {
+            LocalDate s = LocalDate.of(i(m,1), i(m,2), i(m,3));
+            LocalDate e = LocalDate.of(i(m,4), i(m,5), i(m,6));
+            return ordered(s, e);
+        }
+        // 2
+        m = KO_DAY_OMITTED.matcher(t);
+        if (m.find()) {
+            int y=i(m,1), mo=i(m,2), d1=i(m,3), d2=i(m,4);
+            LocalDate s = LocalDate.of(y, mo, d1);
+            LocalDate e = LocalDate.of(y, mo, d2);
+            return ordered(s, e);
+        }
+        // 3
+        m = KO_YEAR_OMITTED.matcher(t);
+        if (m.find()) {
+            int y=i(m,1), m1=i(m,2), d1=i(m,3), m2=i(m,4), d2=i(m,5);
+            LocalDate s = LocalDate.of(y, m1, d1);
+            LocalDate e = LocalDate.of(y, m2, d2);
+            // 연도 넘어가는 케이스 보정: 12월~1월이면 +1년
+            if (m2 < m1) e = e.plusYears(1);
+            return ordered(s, e);
+        }
+        // 4
+        m = KO_SIMPLE.matcher(t);
+        if (m.find()) {
+            int m1=i(m,1), d1=i(m,2), m2=i(m,3), d2=i(m,4);
+            LocalDate s = LocalDate.of(todayBase.getYear(), m1, d1);
+            LocalDate e = LocalDate.of(todayBase.getYear(), (m2==0?m1:m2), d2);
+            if ((m2!=0) && m2 < m1) e = e.plusYears(1);
+            return ordered(s, e);
+        }
+        // 5
+        m = ISO2.matcher(t);
+        if (m.find()) {
+            LocalDate s = LocalDate.of(i(m,1), i(m,2), i(m,3));
+            LocalDate e = LocalDate.of(i(m,4), i(m,5), i(m,6));
+            return ordered(s, e);
+        }
+        // 6
+        m = ISO_YEAR_OMITTED.matcher(t);
+        if (m.find()) {
+            int y=i(m,1), m1=i(m,2), d1=i(m,3), m2=i(m,4), d2=i(m,5);
+            LocalDate s = LocalDate.of(y, m1, d1);
+            LocalDate e = LocalDate.of(y, m2, d2);
+            if (m2 < m1) e = e.plusYears(1);
+            return ordered(s, e);
+        }
+        // 7
+        m = MD_RANGE.matcher(t);
+        if (m.find()) {
+            int m1=i(m,1), d1=i(m,2), m2=i(m,3), d2=i(m,4);
+            LocalDate s = LocalDate.of(todayBase.getYear(), m1, d1);
+            LocalDate e = LocalDate.of(todayBase.getYear(), m2, d2);
+            if (m2 < m1) e = e.plusYears(1);
+            return ordered(s, e);
+        }
+        // 8) 단일 날짜만 발견 시(요구에 따라 한-day 처리 or 에러)
+        m = SINGLE_KO.matcher(t);
+        if (m.find()) {
+            LocalDate s = LocalDate.of(i(m,1), i(m,2), i(m,3));
+            return new DateRange(s, s);
+        }
+        m = SINGLE_ISO.matcher(t);
+        if (m.find()) {
+            LocalDate s = LocalDate.of(i(m,1), i(m,2), i(m,3));
+            return new DateRange(s, s);
+        }
+
+        throw new GeneralException(ErrorStatus.REQUIRED_FIELD_MISSING, "기간에서 날짜 2개를 찾지 못했습니다.");
+    }
+
+    private static int i(Matcher m, int g) { return Integer.parseInt(m.group(g)); }
+    private static DateRange ordered(LocalDate a, LocalDate b) {
+        return b.isBefore(a) ? new DateRange(b, a) : new DateRange(a, b);
     }
 
 }
