@@ -1,7 +1,9 @@
 package com.itzi.itzi.recruitings.service;
 
+import com.itzi.itzi.auth.domain.OrgProfile;
 import com.itzi.itzi.auth.domain.OrgType;
 import com.itzi.itzi.auth.domain.User;
+import com.itzi.itzi.auth.repository.OrgProfileRepository;
 import com.itzi.itzi.global.gemini.GeminiService;
 import com.itzi.itzi.posts.dto.response.*;
 import com.itzi.itzi.posts.service.PostService;
@@ -44,6 +46,7 @@ public class RecruitService {
     private final S3Service s3Service;
     private final GeminiService geminiService;
     private final PostService postService;
+    private final OrgProfileRepository orgProfileRepository;
 
     public RecruitingAiGenerateResponse generateRecruitingAi(Long userId, Type type, RecruitingAiGenerateRequest request) {
 
@@ -58,7 +61,10 @@ public class RecruitService {
 
         // 4. 엔티티 구성
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("해당 사용자를 찾을 수 없습니다: " + userId));
+                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
+
+        OrgProfile orgProfile = orgProfileRepository.findByUser_UserId(userId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.NOT_FOUND));
 
         Post entity = Post.builder()
                         .user(user)
@@ -76,6 +82,7 @@ public class RecruitService {
                         .conditionNegotiable(Boolean.TRUE.equals(request.getConditionNegotiable()))
                         .exposureEndDate(request.getExposureEndDate())
                         .status(Status.DRAFT)
+                        .orgProfile(orgProfile)
                         .build();
 
         // 5. 이미지 업로드/변경
@@ -109,20 +116,45 @@ public class RecruitService {
                 .build();
     }
 
-    // 이미지 업로드/변경
+    private static final int MAX_URL_LEN = 500;
+
     private void handleImageUpload(Post entity, MultipartFile file) {
         if (file == null || file.isEmpty()) return;
 
+        // 1) 새 파일 먼저 업로드
+        final String oldUrl = entity.getPostImage();
+        final String newUrl;
         try {
-            // 기존 이미지가 존재한다면 삭제
-            if (entity.getPostImage() != null && !entity.getPostImage().isBlank()) {
-                s3Service.deleteImageUrl(entity.getPostImage());
-            }
-
-            String uploadUrl = s3Service.upload(file);
-            entity.setPostImage(uploadUrl);
+            newUrl = s3Service.upload(file);    // 업로드만 수행, 아직 엔티티 반영 X
         } catch (IOException e) {
+            // 업로드 실패 시 기존 상태 유지
             throw new GeneralException(ErrorStatus.INTERNAL_ERROR, "이미지 업로드에 실패했습니다.");
+        }
+
+
+        // 2) (선택) 동일 URL이면 아무 것도 하지 않음
+        if (oldUrl != null && oldUrl.equals(newUrl)) {
+            return;
+        }
+
+        // 3) (권장) DB 컬럼 길이 방어 – 컬럼이 VARCHAR라면 길이 체크
+        if (newUrl != null && newUrl.length() > MAX_URL_LEN) {
+            // 업로드는 됐지만 DB에 못 넣을 길이라면, 업로드한 객체를 정리할지 판단(옵션)
+            // s3Service.deleteImageUrl(newUrl); // 필요시 정리
+            throw new GeneralException(ErrorStatus._BAD_REQUEST, "이미지 url이 너무 깁니다.");
+        }
+
+        // 4) 엔티티에 새 URL 반영
+        entity.setPostImage(newUrl);
+
+        // 5) 새 URL 반영이 끝난 뒤에 기존 파일 삭제 (삭제 실패해도 치명적이지 않으므로 개별 처리)
+        if (oldUrl != null && !oldUrl.isBlank()) {
+            try {
+                s3Service.deleteImageUrl(oldUrl);
+            } catch (Exception cleanupEx) {
+                // 로깅만 하고 진행(필요하면 WARN 수준)
+                 log.warn("Failed to delete old image: {}", oldUrl, cleanupEx);
+            }
         }
     }
 
