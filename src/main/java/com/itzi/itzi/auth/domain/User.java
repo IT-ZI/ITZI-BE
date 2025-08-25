@@ -37,7 +37,7 @@ public class User {
     @Column(nullable = false)
     private String phone;
 
-    @Column(name = "profile_image", nullable = false)
+    @Column(name = "profile_image", nullable = false, length = 500)
     private String profileImage;
 
     @Column(nullable = false)
