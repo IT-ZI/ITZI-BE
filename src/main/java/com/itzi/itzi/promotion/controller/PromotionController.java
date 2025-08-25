@@ -46,10 +46,11 @@ public class PromotionController {
     @PostMapping
     public ApiResponse<PromotionManualPublishResponse> promotionManualPublish(
             @RequestParam(name = "agreementId") Long agreementId,
+            @RequestParam(name="userId") Long userId,
             @ModelAttribute PromotionManualPublishRequest request
     ){
 
-        PromotionManualPublishResponse response = promotionService.promotionManualPublish(agreementId, request);
+        PromotionManualPublishResponse response = promotionService.promotionManualPublish(userId, agreementId, request);
 
         return ApiResponse.of(SuccessStatus._OK, response);
     }
