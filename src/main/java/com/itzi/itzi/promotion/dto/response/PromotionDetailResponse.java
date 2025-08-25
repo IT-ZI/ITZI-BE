@@ -1,6 +1,5 @@
 package com.itzi.itzi.promotion.dto.response;
 
-import com.itzi.itzi.auth.domain.Category;
 import com.itzi.itzi.posts.domain.Status;
 import com.itzi.itzi.posts.domain.Type;
 import lombok.*;
