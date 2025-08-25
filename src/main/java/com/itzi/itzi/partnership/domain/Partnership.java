@@ -14,7 +14,9 @@ import java.util.Set;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class Partnership {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "partnership_id", nullable = false, unique = true)
@@ -38,14 +40,19 @@ public class Partnership {
     @Column(columnDefinition = "TEXT")
     private String content;
 
+    // 문의 전송 여부
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(name = "send_status", nullable = false)
     private SendStatus sendStatus = SendStatus.DRAFT;
 
+    // 수락/거절 상태(상대방 응답)
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(name = "accepted_status", nullable = false)
     private AcceptedStatus acceptedStatus = AcceptedStatus.WAITING;
 
+    @Builder.Default
     @ElementCollection
     @CollectionTable(name = "partnership_keywords", joinColumns = @JoinColumn(name = "partnership_id"))
     private Set<String> keywords = new HashSet<>();
