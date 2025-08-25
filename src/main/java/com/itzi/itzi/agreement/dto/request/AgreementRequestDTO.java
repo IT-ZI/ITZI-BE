@@ -9,12 +9,8 @@ import lombok.*;
 @Builder
 public class AgreementRequestDTO {
 
-    private Long senderId;
-    private Long receiverId;
-    private Long partnershipId;
-
-    private String senderName;
-    private String receiverName;
+    private Long partnershipId; // 필수
+    private Long postId;        // 프론트에서 같이 넘겨줌
 
     private String purpose;
     private String targetPeriod;
@@ -22,7 +18,6 @@ public class AgreementRequestDTO {
     private String role;
     private String effect;
     private String etc;
-
-    // content 는 초기에 null 일 수 있음
-    private String content;
+    private String content; // content는 초기 null 가능
 }
+
