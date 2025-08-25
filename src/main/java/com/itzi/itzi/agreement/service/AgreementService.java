@@ -12,12 +12,14 @@ import com.itzi.itzi.agreement.dto.response.AgreementResponseDTO;
 import com.itzi.itzi.agreement.repository.AgreementRepository;
 import com.itzi.itzi.auth.domain.User;
 import com.itzi.itzi.auth.repository.UserRepository;
+import com.itzi.itzi.global.exception.NotFoundException;
 import com.itzi.itzi.global.gemini.GeminiService;
 import com.itzi.itzi.partnership.domain.AcceptedStatus;
 import com.itzi.itzi.partnership.domain.Partnership;
 import com.itzi.itzi.partnership.dto.response.PartnershipPostResponseDTO;
 import com.itzi.itzi.partnership.repository.PartnershipRepository;
 import com.itzi.itzi.posts.domain.Post;
+import com.itzi.itzi.posts.repository.PostRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,28 +39,39 @@ public class AgreementService {
     private final UserRepository userRepository;
     private final GeminiService geminiService;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final PostRepository postRepository;
 
     /**
-     * 협약서 생성 (임시저장 상태)
+     * 협약서 생성 (임시저장 상태, DRAFT)
+     * 👉 수동 작성 버튼을 눌렀을 때 호출됨
+     *    이후 사용자가 값 입력 후 임시저장(PATCH)에서 수정
      */
     public AgreementDetailResponseDTO createAgreement(AgreementRequestDTO dto) {
-        User sender = userRepository.findById(dto.getSenderId())
-                .orElseThrow(() -> new IllegalArgumentException("보낸 사용자 없음"));
-        User receiver = userRepository.findById(dto.getReceiverId())
-                .orElseThrow(() -> new IllegalArgumentException("받는 사용자 없음"));
+        // 모집글(Post) 조회
+        Post post = postRepository.findById(dto.getPostId())
+                .orElseThrow(() -> new NotFoundException("모집글 없음"));
 
+        // Partnership 조회
         Partnership partnership = partnershipRepository.findById(dto.getPartnershipId())
                 .orElseThrow(() -> new IllegalArgumentException("해당 partnership 없음"));
 
+        // 수락 상태 체크
         if (partnership.getAcceptedStatus() != AcceptedStatus.ACCEPTED) {
             throw new IllegalStateException("제휴 문의가 수락된 상태에서만 협약서 생성이 가능합니다.");
         }
 
+        // Sender / Receiver는 Partnership에서 가져오기
+        User sender = partnership.getSender();
+        User receiver = partnership.getReceiver();
+
         Agreement agreement = Agreement.builder()
+                .partnership(partnership)
+                .post(post)
                 .sender(sender)
                 .receiver(receiver)
-                .senderName(dto.getSenderName())
-                .receiverName(dto.getReceiverName())
+                .senderName(sender.getUserName())     // User 본명
+                .receiverName(receiver.getUserName()) // User 본명
+                // 사용자가 입력하기 전이므로 dto 값은 대부분 null
                 .purpose(dto.getPurpose())
                 .targetPeriod(dto.getTargetPeriod())
                 .benefitCondition(dto.getBenefitCondition())
@@ -67,10 +80,9 @@ public class AgreementService {
                 .etc(dto.getEtc())
                 .content(dto.getContent())
                 .status(Status.DRAFT)
-                .partnership(partnership)
-                .post(partnership.getPost())
                 .build();
 
+        // 기간 파싱 (없으면 null)
         LocalDate[] parsed = parsePeriod(dto.getTargetPeriod(), dto.getContent());
         agreement.setStartDate(parsed[0]);
         agreement.setEndDate(parsed[1]);
@@ -85,6 +97,7 @@ public class AgreementService {
 
     /**
      * 협약서 수정 (DRAFT 상태에서만 가능)
+     * 👉 사용자가 입력 후 임시저장을 눌렀을 때 호출됨
      */
     public AgreementDetailResponseDTO updateAgreement(Long id, AgreementRequestDTO dto) {
         Agreement agreement = agreementRepository.findById(id)
@@ -95,8 +108,8 @@ public class AgreementService {
         }
 
         // 필드 업데이트
-        agreement.setSenderName(dto.getSenderName());
-        agreement.setReceiverName(dto.getReceiverName());
+        agreement.setSenderName(agreement.getSender().getUserName());     // 항상 User 기준으로 갱신
+        agreement.setReceiverName(agreement.getReceiver().getUserName()); // 항상 User 기준으로 갱신
         agreement.setPurpose(dto.getPurpose());
         agreement.setTargetPeriod(dto.getTargetPeriod());
         agreement.setBenefitCondition(dto.getBenefitCondition());
@@ -112,6 +125,9 @@ public class AgreementService {
         return AgreementDetailResponseDTO.fromEntity(agreement);
     }
 
+    /**
+     * 협약서 상태: 문서 변환
+     */
     public AgreementDetailResponseDTO generateAgreement(Long agreementId) {
         Agreement agreement = agreementRepository.findById(agreementId)
                 .orElseThrow(() -> new IllegalArgumentException("협약서 없음"));
@@ -119,6 +135,10 @@ public class AgreementService {
         return AgreementDetailResponseDTO.fromEntity(agreement);
     }
 
+    /**
+     * AI 기반 협약서 자동 생성
+     * 👉 Partnership 기반으로 최초 Agreement 생성
+     */
     public AgreementDetailResponseDTO generateAgreementAi(Long partnershipId) {
         Partnership partnership = partnershipRepository.findById(partnershipId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 partnership 없음"));
@@ -152,7 +172,7 @@ public class AgreementService {
         Agreement agreement = Agreement.builder()
                 .sender(sender)
                 .receiver(receiver)
-                .senderName(sender.getProfileName())
+                .senderName(sender.getProfileName())       // AI 생성은 프로필명 사용 (기존 코드 유지)
                 .receiverName(receiver.getProfileName())
                 .purpose(parsed.get("purpose"))
                 .targetPeriod(parsed.get("targetPeriod"))
@@ -256,6 +276,9 @@ public class AgreementService {
         return AgreementDetailResponseDTO.fromEntity(agreement);
     }
 
+    /**
+     * Accepted / Approved 리스트 조회
+     */
     public Map<String, List<?>> getAcceptedAndApproved(Long userId) {
         List<AcceptedPartnershipResponseDTO> acceptedList =
                 partnershipRepository.findByAcceptedStatusAndSenderUserIdOrAcceptedStatusAndReceiverUserId(
@@ -304,6 +327,9 @@ public class AgreementService {
         return dto;
     }
 
+    /**
+     * 기간 파싱 (YYYY-MM-DD 혹은 한글날짜)
+     */
     private LocalDate[] parsePeriod(String targetPeriod, String content) {
         String text = (targetPeriod != null && !targetPeriod.isBlank())
                 ? targetPeriod
@@ -352,8 +378,10 @@ public class AgreementService {
         return new LocalDate[]{null, null};
     }
 
+    /**
+     * 캘린더 조회: 승인된 협약서만
+     */
     public List<AgreementCalendarResponseDTO> getApprovedAgreementsByMonth(Long userId, int year, int month) {
-        // 해당 월의 시작일, 마지막일 계산
         LocalDate startOfMonth = LocalDate.of(year, month, 1);
         LocalDate endOfMonth = startOfMonth.withDayOfMonth(startOfMonth.lengthOfMonth());
 
@@ -364,9 +392,29 @@ public class AgreementService {
                 .stream()
                 .filter(a -> a.getStartDate() != null && a.getEndDate() != null)
                 .filter(a -> !(a.getEndDate().isBefore(startOfMonth) || a.getStartDate().isAfter(endOfMonth)))
-                // 👉 즉, 이번 달과 겹치는 기간만 남김
                 .map(a -> AgreementCalendarResponseDTO.fromEntity(a, userId))
                 .toList();
+    }
+
+    /**
+     * 협의 중인 항목 클릭 시 partnershipId 기반으로 postId 반환
+     * 👉 Agreement 생성 전 준비 단계
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> prepareAgreement(Long partnershipId) {
+        Partnership partnership = partnershipRepository.findById(partnershipId)
+                .orElseThrow(() -> new IllegalArgumentException("해당 partnership 없음"));
+
+        Post post = partnership.getPost(); // Partnership과 Post 연관관계 있다고 가정
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("partnershipId", partnership.getPartnershipId());
+        result.put("postId", post != null ? post.getPostId() : null);
+        result.put("partnerDisplayName",
+                partnership.getReceiver() != null ? partnership.getReceiver().getProfileName() : null
+        );
+
+        return result;
     }
 
 
